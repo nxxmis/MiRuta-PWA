@@ -158,33 +158,144 @@ function updateFab() {
 }
 
 // -------------------------------------------------------------
-// Tab Navigation
+// Tab Navigation & Swipe Gestures
 // -------------------------------------------------------------
+
+const MAIN_TABS = ['inicio', 'familias', 'pagos', 'ajustes'];
+
+window.switchTab = async function(path) {
+  if (!MAIN_TABS.includes(path)) return;
+  if (state.currentTab === path) return;
+
+  const navLinks = document.querySelectorAll('nav [data-path]');
+  const targetLink = document.querySelector(`nav [data-path="${path}"]`);
+
+  navLinks.forEach(l => {
+    l.className = 'flex flex-col items-center justify-center gap-1 min-w-[4rem] h-12 text-on-surface-variant transition-all hover:text-on-surface';
+    l.removeAttribute('aria-current');
+  });
+
+  if (targetLink) {
+    targetLink.className = 'flex flex-col items-center justify-center gap-1 min-w-[4rem] h-12 transition-all text-secondary font-bold scale-105';
+    targetLink.setAttribute('aria-current', 'page');
+  }
+
+  // Hide all view sections
+  document.querySelectorAll('.view-tab').forEach(sec => sec.classList.add('hidden'));
+
+  // Show selected section
+  state.currentTab = path;
+  const targetSec = document.getElementById(`view-${path}`);
+  if (targetSec) {
+    targetSec.classList.remove('hidden');
+  }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  await renderApp();
+};
+
+function setupSwipeNavigation() {
+  const main = document.querySelector('main');
+  if (!main) return;
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartTime = 0;
+  let isIgnored = false;
+
+  function isInteractiveElement(el) {
+    if (!el) return false;
+    return !!el.closest('input, textarea, select, [contenteditable="true"]');
+  }
+
+  function isInsideHorizontalScroll(el) {
+    let curr = el;
+    while (curr && curr !== main && curr !== document.body && curr !== document.documentElement) {
+      if (curr.scrollWidth > curr.clientWidth + 6) {
+        const overflowX = window.getComputedStyle(curr).overflowX;
+        if (overflowX === 'auto' || overflowX === 'scroll') return true;
+      }
+      if (curr.classList && curr.classList.contains('overflow-x-auto') && curr.scrollWidth > curr.clientWidth + 6) {
+        return true;
+      }
+      curr = curr.parentElement;
+    }
+    return false;
+  }
+
+  function isModalOpen() {
+    if (document.body.classList.contains('overflow-hidden')) return true;
+    return !!document.querySelector('.fixed.z-50:not(.hidden)');
+  }
+
+  main.addEventListener('touchstart', (e) => {
+    // Ignore multi-touch
+    if (e.touches.length !== 1) {
+      isIgnored = true;
+      return;
+    }
+
+    const target = e.target;
+    if (isModalOpen() || isInteractiveElement(target) || isInsideHorizontalScroll(target)) {
+      isIgnored = true;
+      return;
+    }
+
+    isIgnored = false;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchStartTime = Date.now();
+  }, { passive: true });
+
+  main.addEventListener('touchend', (e) => {
+    if (isIgnored || !e.changedTouches || e.changedTouches.length === 0) return;
+
+    const target = e.target;
+    if (isModalOpen() || isInteractiveElement(target) || isInsideHorizontalScroll(target)) return;
+
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    const deltaX = touchEndX - touchStartX;
+    const deltaY = touchEndY - touchStartY;
+    const elapsedTime = Date.now() - touchStartTime;
+
+    // Discard slow gestures (> 800ms)
+    if (elapsedTime > 800) return;
+
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+
+    // Rule: deltaX > 60px AND |deltaX| > |deltaY| * 1.5
+    if (absX > 60 && absX > absY * 1.5) {
+      const currentIdx = MAIN_TABS.indexOf(state.currentTab || 'inicio');
+      if (currentIdx === -1) return;
+
+      if (deltaX < 0) {
+        // Swipe Left -> Next tab
+        if (currentIdx < MAIN_TABS.length - 1) {
+          window.switchTab(MAIN_TABS[currentIdx + 1]);
+        }
+      } else {
+        // Swipe Right -> Prev tab
+        if (currentIdx > 0) {
+          window.switchTab(MAIN_TABS[currentIdx - 1]);
+        }
+      }
+    }
+  }, { passive: true });
+
+  main.addEventListener('touchcancel', () => {
+    isIgnored = true;
+  }, { passive: true });
+}
+
 function setupNavigation() {
   const navLinks = document.querySelectorAll('nav [data-path]');
   navLinks.forEach(link => {
     link.addEventListener('click', async (e) => {
       e.preventDefault();
       const path = link.getAttribute('data-path');
-      
-      navLinks.forEach(l => {
-        l.className = 'flex flex-col items-center justify-center gap-1 min-w-[4rem] h-12 text-on-surface-variant transition-all hover:text-on-surface';
-        l.removeAttribute('aria-current');
-      });
-
-      link.className = 'flex flex-col items-center justify-center gap-1 min-w-[4rem] h-12 transition-all text-secondary font-bold scale-105';
-      link.setAttribute('aria-current', 'page');
-
-      // Hide all view sections
-      document.querySelectorAll('.view-tab').forEach(sec => sec.classList.add('hidden'));
-
-      // Show selected section
-      state.currentTab = path;
-      const targetSec = document.getElementById(`view-${path}`);
-      if (targetSec) targetSec.classList.remove('hidden');
-
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      await renderApp();
+      await window.switchTab(path);
     });
   });
 
@@ -192,8 +303,7 @@ function setupNavigation() {
   const headerUserBtn = document.getElementById('headerUserBtn');
   if (headerUserBtn) {
     headerUserBtn.addEventListener('click', () => {
-      const ajustesLink = document.querySelector('nav [data-path="ajustes"]');
-      if (ajustesLink) ajustesLink.click();
+      window.switchTab('ajustes');
     });
   }
 
@@ -216,6 +326,9 @@ function setupNavigation() {
       }
     });
   }
+
+  // Setup lateral swipe gestures on main container
+  setupSwipeNavigation();
 }
 
 // -------------------------------------------------------------

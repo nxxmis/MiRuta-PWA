@@ -215,6 +215,20 @@
         margin-bottom: 1rem !important;
       }
     }
+    /* Transición visual suave entre vistas principales */
+    @keyframes viewFadeSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .view-tab:not(.hidden) {
+      animation: viewFadeSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
   </style>
 </head>
 
@@ -561,19 +575,26 @@
         </div>
       </section>
 
-      <!-- Botón Guía Rápida de Uso Destacado -->
-      <button type="button" onclick="openUserGuideModal()" class="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-primary-fixed to-primary-container/30 border border-primary-container/50 text-on-primary-fixed-variant font-label-lg text-label-lg font-bold flex items-center justify-between shadow-sm active:scale-[0.98] transition-all hover:shadow-md">
-        <div class="flex items-center gap-3">
+      <!-- Tarjeta Guía Rápida de Uso Responsiva -->
+      <div class="w-full p-4 rounded-2xl bg-gradient-to-r from-primary-fixed to-primary-container/30 border border-primary-container/50 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5">
+        <div class="flex items-center gap-3 min-w-0 w-full sm:w-auto cursor-pointer" onclick="openUserGuideModal()">
           <div class="w-10 h-10 rounded-xl bg-surface-container-lowest flex items-center justify-center text-xl shadow-inner shrink-0">
             📖
           </div>
           <div class="flex flex-col text-left min-w-0">
-            <span class="font-headline-sm text-headline-sm text-on-surface font-extrabold truncate">Guía Rápida de Uso</span>
-            <span class="text-body-sm text-on-surface-variant font-medium truncate">4 pasos sencillos para dominar MiRuta (Guardar PDF)</span>
+            <h4 class="font-headline-sm text-headline-sm text-on-surface font-extrabold truncate">
+              Guía Rápida de Uso
+            </h4>
+            <p class="text-body-sm text-on-surface-variant font-medium">
+              4 pasos sencillos para dominar MiRuta
+            </p>
           </div>
         </div>
-        <span class="material-symbols-outlined text-[22px] text-primary shrink-0">arrow_forward</span>
-      </button>
+        <button type="button" onclick="openUserGuideModal()" class="w-full sm:w-auto shrink-0 h-10 px-4 rounded-xl bg-surface-container-lowest hover:bg-surface text-on-surface font-label-md text-label-md font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all border border-primary-container/40" title="Ver guía y exportar a PDF">
+          <span class="material-symbols-outlined text-[18px] text-primary">picture_as_pdf</span>
+          <span>Guardar PDF</span>
+        </button>
+      </div>
 
       <!-- Formulario de Configuración -->
       <form onsubmit="handleSaveSettings(event)" class="flex flex-col gap-space-lg">

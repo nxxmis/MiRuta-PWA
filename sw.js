@@ -1,4 +1,4 @@
-const CACHE_NAME = 'miruta-cache-v8';
+const CACHE_NAME = 'miruta-cache-v9';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

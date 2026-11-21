@@ -110,7 +110,7 @@
 ### 13. ⚙️ Vista de Ajustes e Identidad Oficial
 - **Logo Oficial de MiRuta:** Integrado en la cabecera superior, pantalla de carga y en la sección de Ajustes con el isotipo centrado y libre de bordes residuales.
 - **Splash Screen (Pantalla de Carga):** Animación de apertura suave que exhibe el isotipo oficial, la tipografía de marca y el eslogan: *"Tu transporte escolar, organizado y al día"*.
-- **📖 Guía Rápida de Uso Integrada (Exportable a PDF):** Vista ilustrada con iconos que explica en 4 pasos esenciales cómo usar la app (Perfil/Pago Móvil, Familias y Hermanos con descuento, Pagos semanales y Recibos por WhatsApp, y Respaldo mensual en JSON), con botón directo para **Imprimir o Guardar como PDF**.
+- **📖 Guía Rápida de Uso Integrada (Exportable a PDF):** Tarjeta responsiva rediseñada que no se desborda en pantallas móviles, con botón directo para **Guardar PDF / Imprimir** en 4 pasos esenciales (Perfil/Pago Móvil, Familias y Hermanos con descuento, Pagos semanales y Recibos por WhatsApp, y Respaldo mensual en JSON).
 - **Firma de Marca en Recibos WhatsApp:** Todos los comprobantes generados para representantes cierran con la firma oficial:
   ```text
   ────────────────────
@@ -121,6 +121,12 @@
 - **Datos de Pago Móvil:** Permite guardar Banco, Cédula/RIF y Teléfono con botón de un solo toque: *"Copiar datos de Pago Móvil"* para enviar instrucciones a los representantes.
 - **Catálogo de Colegios:** Permite añadir y eliminar colegios que luego alimentan las listas desplegables al registrar alumnos.
 - **Respaldo y Restauración (.json):** Exporta toda la base de datos local a un archivo `.json` descargable y permite restaurar respaldos en cualquier momento.
+
+### 14. 👆 Navegación Táctil por Deslizamiento Lateral (Swipe entre Pestañas)
+- **Gestos Táctiles Nativos:** Deslizar el dedo hacia la izquierda o derecha en el contenedor principal cambia fluidamente entre las 4 pestañas: `Inicio` $\leftrightarrow$ `Familias` $\leftrightarrow$ `Pagos` $\leftrightarrow$ `Ajustes`.
+- **Filtro Inteligente Anti Falsos Positivos:** Requiere `|deltaX| > 60px` y `|deltaX| > |deltaY| * 1.5` para garantizar que el scroll vertical diario no active cambios accidentales de pantalla.
+- **Detección Contextual Segura:** Cancela automáticamente el swipe cuando se interactúa en campos de texto (`input`, `textarea`, `select`), listas con scroll horizontal o cuando existe cualquier modal abierto.
+- **Transición Visual Fluida:** Animación CSS con aceleración de hardware para un cambio de vista suave y moderno.
 
 ---
 
