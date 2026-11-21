@@ -9,6 +9,8 @@ const state = {
   selectedTurn: 'Mañana', // 'Mañana' | 'Tarde'
   selectedYear: new Date().getFullYear(),
   selectedMonth: new Date().getMonth() + 1, // 1-12
+  inicioSearch: '',
+  isReorderMode: false,
   familySearch: '',
   familyFilter: 'all', // 'all' | 'siblings' | 'pending' | 'ontime'
   paymentSearch: '',
@@ -331,22 +333,25 @@ function renderFinancialSummary() {
   const families = state.cachedData.families;
   const totalWeeks = getWeeksInMonth(currentYear, currentMonth);
 
-  let totalExpected = 0;
-  families.forEach(f => {
-    totalExpected += (f.weeklyRate || 0) * totalWeeks;
-  });
-
   const monthPayments = state.cachedData.payments.filter(p => p.year === currentYear && p.month === currentMonth);
   let totalCollected = 0;
   monthPayments.forEach(p => {
-    totalCollected += (p.amount || 0);
+    if (p.status !== 'exonerado' && p.method !== 'exonerado') {
+      totalCollected += (p.amount || 0);
+    }
   });
 
-  // Calculate families "al día" (have paid all weeks)
+  // Calcular ingresos esperados (excluyendo semanas exoneradas) y familias al día
+  let totalExpected = 0;
   let familiesOnTime = 0;
+
   families.forEach(fam => {
-    const paidWeeks = monthPayments.filter(p => p.familyId === fam.id).length;
-    if (paidWeeks >= totalWeeks) {
+    const famPayments = monthPayments.filter(p => p.familyId === fam.id);
+    const exoneratedCount = famPayments.filter(p => p.status === 'exonerado' || p.method === 'exonerado').length;
+    const billableWeeks = Math.max(0, totalWeeks - exoneratedCount);
+    totalExpected += (fam.weeklyRate || 0) * billableWeeks;
+
+    if (famPayments.length >= totalWeeks) {
       familiesOnTime++;
     }
   });
@@ -434,22 +439,64 @@ function renderChildrenCards() {
   const container = document.getElementById('studentsContainer');
   if (!container) return;
 
-  const children = state.cachedData.children.filter(c => c.turn === state.selectedTurn);
+  const turnField = state.selectedTurn === 'Mañana' ? 'ordenManana' : 'ordenTarde';
+  let allTurnChildren = state.cachedData.children.filter(c => c.turn === state.selectedTurn);
+  allTurnChildren.sort((a, b) => {
+    const orderA = a[turnField] != null ? a[turnField] : a.id;
+    const orderB = b[turnField] != null ? b[turnField] : b.id;
+    return orderA - orderB;
+  });
+
+  const childOrderMap = new Map();
+  allTurnChildren.forEach((c, idx) => {
+    childOrderMap.set(c.id, idx + 1);
+  });
+
   const families = state.cachedData.families;
   const familyMap = new Map(families.map(f => [f.id, f]));
   const attendance = state.cachedData.attendance;
 
+  const q = normalizeSearchText(state.inicioSearch);
+  let children = allTurnChildren;
+  if (q) {
+    children = allTurnChildren.filter(child => {
+      const family = familyMap.get(child.familyId);
+      const repName = family ? family.repName : '';
+      const phone = family ? family.phone : '';
+      const searchTarget = normalizeSearchText(`${child.firstName} ${child.lastName} ${child.school} ${repName} ${phone} ${child.modality}`);
+      return searchTarget.includes(q);
+    });
+  }
+
+  const countBadge = document.getElementById('studentsCountBadge');
+  if (countBadge) {
+    countBadge.textContent = children.length;
+  }
+
   if (children.length === 0) {
-    container.innerHTML = `
-      <div class="bg-surface-container-lowest p-space-xl rounded-2xl text-center flex flex-col items-center justify-center gap-2 border border-dashed border-outline-variant">
-        <span class="material-symbols-outlined text-4xl text-on-surface-variant/50">directions_bus</span>
-        <p class="font-headline-sm text-headline-sm text-on-surface font-bold">No hay niños en el Turno ${state.selectedTurn}</p>
-        <p class="font-body-sm text-body-sm text-on-surface-variant">Puedes agregar nuevos alumnos en la sección de Familias.</p>
-        <button onclick="openFamilyModal()" class="mt-2 px-4 py-2 rounded-xl bg-secondary text-on-secondary font-label-md text-label-md font-bold shadow-sm">
-          + Agregar Familia y Niños
-        </button>
-      </div>
-    `;
+    if (q) {
+      container.innerHTML = `
+        <div class="bg-surface-container-lowest p-space-xl rounded-2xl text-center flex flex-col items-center justify-center gap-2 border border-dashed border-outline-variant">
+          <span class="material-symbols-outlined text-4xl text-on-surface-variant/50">search_off</span>
+          <p class="font-headline-sm text-headline-sm text-on-surface font-bold">No se encontraron alumnos para "${escapeHtml(state.inicioSearch)}"</p>
+          <p class="font-body-sm text-body-sm text-on-surface-variant">Intenta buscar por otro nombre o limpia el filtro.</p>
+          <button onclick="clearInicioSearch()" class="mt-2 px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md font-bold shadow-sm transition-all">
+            Limpiar búsqueda
+          </button>
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <div class="bg-surface-container-lowest p-space-xl rounded-2xl text-center flex flex-col items-center justify-center gap-2 border border-dashed border-outline-variant">
+          <span class="material-symbols-outlined text-4xl text-on-surface-variant/50">directions_bus</span>
+          <p class="font-headline-sm text-headline-sm text-on-surface font-bold">No hay niños en el Turno ${state.selectedTurn}</p>
+          <p class="font-body-sm text-body-sm text-on-surface-variant">Puedes agregar nuevos alumnos en la sección de Familias.</p>
+          <button onclick="openFamilyModal()" class="mt-2 px-4 py-2 rounded-xl bg-secondary text-on-secondary font-label-md text-label-md font-bold shadow-sm">
+            + Agregar Familia y Niños
+          </button>
+        </div>
+      `;
+    }
     return;
   }
 
@@ -461,8 +508,13 @@ function renderChildrenCards() {
     const family = familyMap.get(child.familyId);
     const repName = family ? family.repName : 'Sin representante';
     const repPhone = family ? family.phone.replace(/[^0-9]/g, '') : '';
-    const isBoarded = attendance[child.id] === 'abordado';
+    const attStatus = attendance[child.id] || 'espera';
     const bdayInfo = upcomingMap.get(child.id);
+    const routePos = childOrderMap.get(child.id) || 1;
+
+    const currentTurnIdx = allTurnChildren.findIndex(c => c.id === child.id);
+    const isFirst = currentTurnIdx === 0;
+    const isLast = currentTurnIdx === allTurnChildren.length - 1;
 
     // Initials avatar
     const initials = getInitials(child.firstName, child.lastName);
@@ -494,24 +546,55 @@ function renderChildrenCards() {
       `;
     }
 
-    // Boarded button style
-    const statusBtnClass = isBoarded
-      ? 'status-btn font-label-md text-label-md px-3.5 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container font-extrabold flex items-center gap-1.5 active:scale-95 transition-all shadow-sm'
-      : 'status-btn font-label-md text-label-md px-3.5 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant font-bold flex items-center gap-1.5 active:scale-95 transition-all';
-    
-    const statusBtnText = isBoarded
-      ? '<span class="material-symbols-outlined text-[16px] text-secondary">check_circle</span><span>Abordado ✅</span>'
-      : '<span class="material-symbols-outlined text-[16px]">schedule</span><span>En espera ⏳</span>';
+    // Status button style & text (supports 'espera', 'abordado', 'no_asistio')
+    let statusBtnClass = '';
+    let statusBtnText = '';
+    if (attStatus === 'abordado') {
+      statusBtnClass = 'status-btn font-label-md text-label-md px-3.5 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container font-extrabold flex items-center gap-1.5 active:scale-95 transition-all shadow-sm';
+      statusBtnText = '<span class="material-symbols-outlined text-[16px] text-secondary">check_circle</span><span>Abordado ✅</span>';
+    } else if (attStatus === 'no_asistio') {
+      statusBtnClass = 'status-btn font-label-md text-label-md px-3.5 py-1.5 rounded-xl bg-error-container/40 text-error font-extrabold flex items-center gap-1.5 active:scale-95 transition-all shadow-sm border border-error/30';
+      statusBtnText = '<span class="material-symbols-outlined text-[16px] text-error">person_off</span><span>No asistió ❌</span>';
+    } else {
+      statusBtnClass = 'status-btn font-label-md text-label-md px-3.5 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant font-bold flex items-center gap-1.5 active:scale-95 transition-all';
+      statusBtnText = '<span class="material-symbols-outlined text-[16px]">schedule</span><span>En espera ⏳</span>';
+    }
 
     const waUrl = repPhone ? `https://wa.me/${repPhone}?text=${encodeURIComponent(`Hola ${repName}, te saluda el transporte escolar respecto a ${child.firstName}.`)}` : '#';
 
+    // Action button in header: Reorder buttons if isReorderMode, else WhatsApp link
+    let actionHtml = '';
+    if (state.isReorderMode) {
+      actionHtml = `
+        <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
+          <button type="button" onclick="moveChildRouteOrder(${child.id}, 'up')" ${isFirst ? 'disabled' : ''} class="w-10 h-10 rounded-xl ${isFirst ? 'opacity-20 bg-surface-container text-on-surface-variant cursor-not-allowed' : 'bg-primary-container/40 hover:bg-primary-container text-primary font-black active:scale-90 shadow-sm'} flex items-center justify-center transition-all" title="Subir parada en la ruta">
+            <span class="material-symbols-outlined text-[24px]">arrow_upward</span>
+          </button>
+          <button type="button" onclick="moveChildRouteOrder(${child.id}, 'down')" ${isLast ? 'disabled' : ''} class="w-10 h-10 rounded-xl ${isLast ? 'opacity-20 bg-surface-container text-on-surface-variant cursor-not-allowed' : 'bg-primary-container/40 hover:bg-primary-container text-primary font-black active:scale-90 shadow-sm'} flex items-center justify-center transition-all" title="Bajar parada en la ruta">
+            <span class="material-symbols-outlined text-[24px]">arrow_downward</span>
+          </button>
+        </div>
+      `;
+    } else {
+      actionHtml = `
+        <a href="${waUrl}" target="_blank" onclick="event.stopPropagation()" class="w-10 h-10 rounded-xl bg-secondary/10 text-secondary hover:bg-secondary hover:text-on-secondary transition-colors flex items-center justify-center flex-shrink-0 active:scale-95" title="Contactar a ${repName} por WhatsApp">
+          <span class="material-symbols-outlined text-[20px]">chat</span>
+        </a>
+      `;
+    }
+
+    const cardBorder = state.isReorderMode
+      ? 'border-2 border-primary/50 shadow-md ring-1 ring-primary/20'
+      : 'border border-surface-container/40 hover:shadow-md';
+
     html += `
-      <div class="bg-surface-container-lowest p-space-md rounded-2xl shadow-sm flex flex-col gap-space-sm border border-surface-container/40 hover:shadow-md transition-shadow cursor-pointer active:scale-[0.99]" onclick="openStudentAttendanceModal(${child.id})">
+      <div class="bg-surface-container-lowest p-space-md rounded-2xl shadow-sm flex flex-col gap-space-sm ${cardBorder} transition-all cursor-pointer active:scale-[0.99]" onclick="openStudentAttendanceModal(${child.id})">
         <div class="flex items-start justify-between gap-space-sm">
           <div class="flex items-center gap-space-sm min-w-0">
-            <!-- Avatar Iniciales -->
+            <!-- Avatar Iniciales con badge de orden de ruta -->
             <div class="relative w-12 h-12 rounded-2xl flex-shrink-0 ${avatarBg} font-headline-sm text-headline-sm font-extrabold flex items-center justify-center shadow-sm select-none">
               <span>${initials}</span>
+              <span class="absolute -top-1.5 -left-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-white text-[#065F46] border border-emerald-200 shadow-sm font-bold text-[10px] flex items-center justify-center select-none" title="Parada #${routePos}">#${routePos}</span>
               ${bdayInfo ? '<span class="absolute -bottom-1 -right-1 text-sm select-none" title="Cumpleaños próximo">🎂</span>' : ''}
             </div>
 
@@ -532,10 +615,8 @@ function renderChildrenCards() {
             </div>
           </div>
 
-          <!-- Botón rápido WhatsApp -->
-          <a href="${waUrl}" target="_blank" onclick="event.stopPropagation()" class="w-10 h-10 rounded-xl bg-secondary/10 text-secondary hover:bg-secondary hover:text-on-secondary transition-colors flex items-center justify-center flex-shrink-0 active:scale-95" title="Contactar a ${repName} por WhatsApp">
-            <span class="material-symbols-outlined text-[20px]">chat</span>
-          </a>
+          <!-- Acción Cabecera: Botones de orden o WhatsApp -->
+          ${actionHtml}
         </div>
 
         <!-- Fila Inferior: Píldora Modalidad y Botón Estado Abordado -->
@@ -554,7 +635,7 @@ function renderChildrenCards() {
   container.innerHTML = html;
 }
 
-// Attendance toggle handler
+// Attendance toggle handler (Ciclo: En espera -> Abordado -> No asistió -> En espera)
 window.toggleAttendance = async function(childId, btn) {
   try {
     const newStatus = await MiRutaDB.toggleChildAttendance(childId);
@@ -564,6 +645,10 @@ window.toggleAttendance = async function(childId, btn) {
       btn.className = 'status-btn font-label-md text-label-md px-3.5 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container font-extrabold flex items-center gap-1.5 active:scale-95 transition-all shadow-sm';
       btn.innerHTML = '<span class="material-symbols-outlined text-[16px] text-secondary">check_circle</span><span>Abordado ✅</span>';
       showToast('Estudiante marcado como Abordado', 'check_circle');
+    } else if (newStatus === 'no_asistio') {
+      btn.className = 'status-btn font-label-md text-label-md px-3.5 py-1.5 rounded-xl bg-error-container/40 text-error font-extrabold flex items-center gap-1.5 active:scale-95 transition-all shadow-sm border border-error/30';
+      btn.innerHTML = '<span class="material-symbols-outlined text-[16px] text-error">person_off</span><span>No asistió ❌</span>';
+      showToast('Estudiante marcado como No asistió', 'person_off');
     } else {
       btn.className = 'status-btn font-label-md text-label-md px-3.5 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant font-bold flex items-center gap-1.5 active:scale-95 transition-all';
       btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">schedule</span><span>En espera ⏳</span>';
@@ -573,6 +658,95 @@ window.toggleAttendance = async function(childId, btn) {
     console.error('Error toggling attendance:', err);
     showToast('Error al actualizar estado', 'error');
   }
+};
+
+// -------------------------------------------------------------
+// CONTROLADOR DE ORDEN DE RUTA Y BÚSQUEDA INSTANTÁNEA
+// -------------------------------------------------------------
+window.toggleReorderMode = function() {
+  state.isReorderMode = !state.isReorderMode;
+  const btn = document.getElementById('toggleReorderBtn');
+  const btnText = document.getElementById('reorderBtnText');
+  const btnIcon = document.getElementById('reorderBtnIcon');
+  if (state.isReorderMode) {
+    if (btn) btn.className = 'px-3 py-1 rounded-xl bg-primary text-on-primary font-label-md text-label-md font-bold flex items-center gap-1.5 transition-all shadow-md active:scale-95';
+    if (btnText) btnText.textContent = 'Listo';
+    if (btnIcon) btnIcon.textContent = 'check';
+    showToast('Modo ordenar ruta activo. Usa ▲ y ▼ para organizar.', 'swap_vert');
+  } else {
+    if (btn) btn.className = 'px-3 py-1 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 border border-surface-container/60';
+    if (btnText) btnText.textContent = 'Ordenar ruta';
+    if (btnIcon) btnIcon.textContent = 'swap_vert';
+    showToast('Orden de ruta guardado', 'check_circle');
+  }
+  renderChildrenCards();
+};
+
+window.moveChildRouteOrder = async function(childId, direction) {
+  const turnField = state.selectedTurn === 'Mañana' ? 'ordenManana' : 'ordenTarde';
+  let turnChildren = state.cachedData.children.filter(c => c.turn === state.selectedTurn);
+  turnChildren.sort((a, b) => {
+    const valA = a[turnField] != null ? a[turnField] : a.id;
+    const valB = b[turnField] != null ? b[turnField] : b.id;
+    return valA - valB;
+  });
+
+  const idx = turnChildren.findIndex(c => c.id === Number(childId));
+  if (idx === -1) return;
+
+  const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (targetIdx < 0 || targetIdx >= turnChildren.length) return;
+
+  // Swap
+  const movedChild = turnChildren[idx];
+  const targetChild = turnChildren[targetIdx];
+  turnChildren[idx] = targetChild;
+  turnChildren[targetIdx] = movedChild;
+
+  // Assign normalized 1-based order
+  const updates = [];
+  turnChildren.forEach((c, newPos) => {
+    c[turnField] = newPos + 1;
+    updates.push({ id: c.id, order: newPos + 1 });
+  });
+
+  // Save to IndexedDB immediately
+  await MiRutaDB.updateChildrenOrder(updates, state.selectedTurn);
+
+  // Update in state cache
+  updates.forEach(u => {
+    const cached = state.cachedData.children.find(c => c.id === u.id);
+    if (cached) cached[turnField] = u.order;
+  });
+
+  renderChildrenCards();
+};
+
+window.clearInicioSearch = function() {
+  const inp = document.getElementById('inicioSearchInput');
+  const btn = document.getElementById('inicioSearchClearBtn');
+  if (inp) inp.value = '';
+  if (btn) btn.classList.add('hidden');
+  state.inicioSearch = '';
+  renderChildrenCards();
+};
+
+window.clearFamilySearch = function() {
+  const inp = document.getElementById('familySearchInput');
+  const btn = document.getElementById('familySearchClearBtn');
+  if (inp) inp.value = '';
+  if (btn) btn.classList.add('hidden');
+  state.familySearch = '';
+  renderFamilias();
+};
+
+window.clearPaymentSearch = function() {
+  const inp = document.getElementById('paymentSearchInput');
+  const btn = document.getElementById('paymentSearchClearBtn');
+  if (inp) inp.value = '';
+  if (btn) btn.classList.add('hidden');
+  state.paymentSearch = '';
+  renderPagos();
 };
 
 // -------------------------------------------------------------
@@ -711,6 +885,14 @@ window.renderStudentAttendanceWeek = async function() {
           Abordó ✅
         </span>
       `;
+    } else if (status === 'no_asistio') {
+      cardBg = 'bg-error-container/15 border-error/25';
+      badgeHtml = `
+        <span class="font-label-sm text-label-sm px-2.5 py-1 rounded-xl bg-error-container/40 text-error font-black flex items-center gap-1 shadow-sm border border-error/20">
+          <span class="material-symbols-outlined text-[15px] text-error">person_off</span>
+          No asistió ❌
+        </span>
+      `;
     } else if (status === 'espera') {
       badgeHtml = `
         <span class="font-label-sm text-label-sm px-2.5 py-1 rounded-xl bg-surface-container-high text-on-surface-variant font-bold flex items-center gap-1">
@@ -746,12 +928,14 @@ window.renderStudentAttendanceWeek = async function() {
           </div>
         </div>
         <div class="flex items-center gap-1">
-          ${badgeHtml}
           ${!isFuture ? `
-            <button type="button" onclick="toggleAttendanceForDate(${childId}, '${dateStr}')" class="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface-variant active:scale-95 transition-transform" title="Cambiar asistencia de este día">
-              <span class="material-symbols-outlined text-[18px]">swap_horiz</span>
+            <button type="button" onclick="cycleAttendanceForDate(${childId}, '${dateStr}')" class="active:scale-95 transition-transform" title="Cambiar estado: Abordó / No asistió / En espera">
+              ${badgeHtml}
             </button>
-          ` : ''}
+            <button type="button" onclick="cycleAttendanceForDate(${childId}, '${dateStr}')" class="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface-variant active:scale-95 transition-transform" title="Alternar asistencia">
+              <span class="material-symbols-outlined text-[18px]">cached</span>
+            </button>
+          ` : badgeHtml}
         </div>
       </div>
     `;
@@ -760,11 +944,23 @@ window.renderStudentAttendanceWeek = async function() {
   container.innerHTML = daysHtml;
 };
 
-window.toggleAttendanceForDate = async function(childId, dateStr) {
+window.cycleAttendanceForDate = async function(childId, dateStr) {
   const numChildId = Number(childId);
   const id = `${numChildId}_${dateStr}`;
   let existing = await MiRutaDB.db.attendance.get(id);
-  const newStatus = (!existing || existing.status === 'espera') ? 'abordado' : 'espera';
+
+  // Ciclo: 'espera' -> 'abordado' -> 'no_asistio' -> 'espera'
+  let newStatus = 'abordado';
+  if (existing) {
+    if (existing.status === 'espera') {
+      newStatus = 'abordado';
+    } else if (existing.status === 'abordado') {
+      newStatus = 'no_asistio';
+    } else if (existing.status === 'no_asistio') {
+      newStatus = 'espera';
+    }
+  }
+
   await MiRutaDB.db.attendance.put({
     id,
     childId: numChildId,
@@ -779,9 +975,16 @@ window.toggleAttendanceForDate = async function(childId, dateStr) {
   }
 
   await renderStudentAttendanceWeek();
-  renderDashboard();
-  showToast(`Asistencia de ${dateStr}: ${newStatus === 'abordado' ? 'Abordado ✅' : 'En espera ⏳'}`, 'check_circle');
+  renderChildrenCards();
+  const statusLabels = {
+    abordado: 'Abordó ✅',
+    no_asistio: 'No asistió ❌',
+    espera: 'En espera ⏳'
+  };
+  showToast(`${dateStr}: ${statusLabels[newStatus]}`, newStatus === 'abordado' ? 'check_circle' : (newStatus === 'no_asistio' ? 'person_off' : 'schedule'));
 };
+
+window.toggleAttendanceForDate = window.cycleAttendanceForDate;
 
 window.closeStudentAttendanceModal = function() {
   const modal = document.getElementById('studentAttendanceModal');
@@ -813,13 +1016,13 @@ async function renderFamilias() {
   });
 
   // Filter and search
-  const q = state.familySearch.toLowerCase().trim();
+  const q = normalizeSearchText(state.familySearch);
   const filter = state.familyFilter;
 
   const filteredFamilies = families.filter(fam => {
     const famChildren = childrenByFam.get(fam.id) || [];
-    const childrenNames = famChildren.map(c => `${c.firstName} ${c.lastName} ${c.school}`).join(' ').toLowerCase();
-    const searchTarget = `${fam.repName} ${fam.phone} ${fam.address} ${childrenNames}`.toLowerCase();
+    const childrenNames = famChildren.map(c => `${c.firstName} ${c.lastName} ${c.school}`).join(' ');
+    const searchTarget = normalizeSearchText(`${fam.repName} ${fam.phone} ${fam.address} ${childrenNames}`);
 
     // Query match
     if (q && !searchTarget.includes(q)) return false;
@@ -999,12 +1202,17 @@ async function renderPagos() {
   // Calculate totals
   let totalExpected = 0;
   families.forEach(f => {
-    totalExpected += (f.weeklyRate || 0) * totalWeeks;
+    const famPayments = payments.filter(p => p.familyId === f.id);
+    const exoneratedCount = famPayments.filter(p => p.status === 'exonerado' || p.method === 'exonerado').length;
+    const billableWeeks = Math.max(0, totalWeeks - exoneratedCount);
+    totalExpected += (f.weeklyRate || 0) * billableWeeks;
   });
 
   let totalCollected = 0;
   payments.forEach(p => {
-    totalCollected += (p.amount || 0);
+    if (p.status !== 'exonerado' && p.method !== 'exonerado') {
+      totalCollected += (p.amount || 0);
+    }
   });
 
   const totalPending = Math.max(0, totalExpected - totalCollected);
@@ -1020,18 +1228,23 @@ async function renderPagos() {
   if (rateComplianceEl) rateComplianceEl.textContent = `${percent}%`;
 
   // Search & Filter
-  const q = state.paymentSearch.toLowerCase().trim();
+  const q = normalizeSearchText(state.paymentSearch);
   const filter = state.paymentFilter;
 
   const filteredFamilies = families.filter(fam => {
     const famChildren = childrenByFam.get(fam.id) || [];
-    const childrenNames = famChildren.map(c => `${c.firstName} ${c.lastName} ${c.school}`).join(' ').toLowerCase();
-    const searchTarget = `${fam.repName} ${fam.phone} ${childrenNames}`.toLowerCase();
+    const childrenNames = famChildren.map(c => `${c.firstName} ${c.lastName} ${c.school}`).join(' ');
+    const searchTarget = normalizeSearchText(`${fam.repName} ${fam.phone} ${childrenNames}`);
 
     if (q && !searchTarget.includes(q)) return false;
 
     const famPayments = payments.filter(p => p.familyId === fam.id);
-    const hasDebt = famPayments.length < totalWeeks;
+    const paidWeeksSet = new Map(famPayments.map(p => [p.week, p]));
+    let pendingCount = 0;
+    for (let w = 1; w <= totalWeeks; w++) {
+      if (!paidWeeksSet.has(w)) pendingCount++;
+    }
+    const hasDebt = pendingCount > 0;
 
     if (filter === 'pending' && !hasDebt) return false;
     if (filter === 'ontime' && hasDebt) return false;
@@ -1064,10 +1277,16 @@ async function renderPagos() {
     const initials = getInitials(fam.repName, '');
     const cleanPhone = fam.phone.replace(/[^0-9]/g, '');
 
-    // Identify pending weeks
+    // Identify pending and exonerated weeks
     const pendingWeeks = [];
+    const exoneratedWeeks = [];
     for (let w = 1; w <= totalWeeks; w++) {
-      if (!paidWeeksSet.has(w)) pendingWeeks.push(w);
+      const p = paidWeeksSet.get(w);
+      if (!p) {
+        pendingWeeks.push(w);
+      } else if (p.status === 'exonerado' || p.method === 'exonerado') {
+        exoneratedWeeks.push(w);
+      }
     }
     const hasDebt = pendingWeeks.length > 0;
     const debtAmount = pendingWeeks.length * fam.weeklyRate;
@@ -1101,13 +1320,24 @@ async function renderPagos() {
               const weekNum = idx + 1;
               const payment = paidWeeksSet.get(weekNum);
               if (payment) {
-                // Week is PAID
-                return `
-                  <button type="button" onclick="showReceiptModal(${payment.id})" class="h-10 rounded-xl bg-secondary text-on-secondary flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-transform" title="Semana ${weekNum} Pagada - Clic para ver recibo">
-                    <span class="material-symbols-outlined text-[16px]">check</span>
-                    <span class="font-label-sm text-label-sm font-bold">Sem ${weekNum}</span>
-                  </button>
-                `;
+                const isExon = payment.status === 'exonerado' || payment.method === 'exonerado';
+                if (isExon) {
+                  // Week is EXONERATED
+                  return `
+                    <button type="button" onclick="showReceiptModal(${payment.id})" class="h-10 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100 flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-transform" title="Semana ${weekNum} Exonerada (${escapeHtml(payment.reason || payment.motivo || 'Vacaciones')}) - Clic para ver comprobante">
+                      <span class="material-symbols-outlined text-[16px] text-tertiary">beach_access</span>
+                      <span class="font-label-sm text-label-sm font-bold">Sem ${weekNum}</span>
+                    </button>
+                  `;
+                } else {
+                  // Week is PAID
+                  return `
+                    <button type="button" onclick="showReceiptModal(${payment.id})" class="h-10 rounded-xl bg-secondary text-on-secondary flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-transform" title="Semana ${weekNum} Pagada - Clic para ver recibo">
+                      <span class="material-symbols-outlined text-[16px]">check</span>
+                      <span class="font-label-sm text-label-sm font-bold">Sem ${weekNum}</span>
+                    </button>
+                  `;
+                }
               } else {
                 // Week is PENDING
                 return `
@@ -1123,7 +1353,7 @@ async function renderPagos() {
 
         <!-- Pie de Tarjeta / Acciones -->
         <div class="pt-space-xs mt-space-xs flex items-center justify-between gap-space-sm border-t border-surface-container/60">
-          <div class="flex items-center gap-1 font-label-md text-label-md">
+          <div class="flex items-center gap-1.5 flex-wrap font-label-md text-label-md">
             ${hasDebt ? `
               <span class="material-symbols-outlined text-[16px] text-error">info</span>
               <span class="text-error font-extrabold">Debe $${debtAmount.toFixed(0)} (Sem ${pendingWeeks.join(', ')})</span>
@@ -1131,6 +1361,12 @@ async function renderPagos() {
               <span class="material-symbols-outlined text-[16px] text-secondary">check_circle</span>
               <span class="text-secondary font-extrabold">Al día ✨</span>
             `}
+            ${exoneratedWeeks.length > 0 ? `
+              <span class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-label-sm text-label-sm font-semibold flex items-center gap-1 border border-slate-200 dark:border-slate-700" title="${exoneratedWeeks.length} semana(s) exonerada(s)">
+                <span class="material-symbols-outlined text-[13px] text-tertiary">beach_access</span>
+                ${exoneratedWeeks.length} sem. exonerada${exoneratedWeeks.length > 1 ? 's' : ''}
+              </span>
+            ` : ''}
           </div>
 
           <div class="flex items-center gap-space-xs">
@@ -1146,6 +1382,10 @@ async function renderPagos() {
                 <span>Cobrar</span>
               </button>
             ` : `
+              <button onclick="openExonerarModal(${fam.id})" class="h-9 px-2.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface font-label-sm text-label-sm font-semibold flex items-center gap-1 active:scale-95 transition-transform" title="Exonerar semanas a esta familia">
+                <span class="material-symbols-outlined text-[16px] text-tertiary">beach_access</span>
+                <span>Exonerar</span>
+              </button>
               <button onclick="openPaymentModal(${fam.id})" class="h-9 px-3 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md font-bold flex items-center gap-1 active:scale-95 transition-transform">
                 <span class="material-symbols-outlined text-[17px]">add</span>
                 <span>Adelanto</span>
@@ -1375,8 +1615,88 @@ window.handleCopyPagoMovil = function() {
 // 5. MODALS & FORMS
 // -------------------------------------------------------------
 
-// MODAL: Registrar Pago (Bottom Sheet)
-window.openPaymentModal = function(preselectedFamilyId = null, preselectedWeek = null) {
+// MODAL: Registrar Pago / Exonerar Período (Bottom Sheet)
+let currentPaymentModalMode = 'payment';
+
+window.setPaymentModalMode = function(mode) {
+  currentPaymentModalMode = mode;
+  const payBtn = document.getElementById('modalModePaymentBtn');
+  const exonBtn = document.getElementById('modalModeExonerateBtn');
+  const payFields = document.getElementById('modalPaymentFieldsSection');
+  const exonFields = document.getElementById('modalExonerateFieldsSection');
+  const submitBtn = document.getElementById('modalSubmitPaymentBtn');
+  const submitIcon = document.getElementById('modalSubmitPaymentIcon');
+  const submitText = document.getElementById('modalSubmitPaymentText');
+  const title = document.getElementById('paymentModalTitle');
+  const subtitle = document.getElementById('paymentModalSubtitle');
+  const dateLabel = document.getElementById('modalDateLabel');
+
+  if (mode === 'exonerate') {
+    if (payBtn) payBtn.className = 'py-2.5 px-3 rounded-xl font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1.5 text-on-surface-variant hover:text-on-surface';
+    if (exonBtn) exonBtn.className = 'py-2.5 px-3 rounded-xl font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1.5 bg-surface-container-lowest text-on-surface shadow-sm';
+
+    if (payFields) payFields.classList.add('hidden');
+    if (exonFields) {
+      exonFields.classList.remove('hidden');
+      exonFields.classList.add('flex');
+    }
+
+    if (title) title.textContent = 'Exonerar Período';
+    if (subtitle) subtitle.textContent = 'Semana sin cobro de tarifa';
+    if (dateLabel) dateLabel.textContent = 'Fecha de exoneración';
+
+    if (submitBtn) {
+      submitBtn.className = 'w-full h-12 rounded-xl bg-tertiary text-on-tertiary font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-transform hover:opacity-95';
+    }
+    if (submitIcon) submitIcon.textContent = 'beach_access';
+    if (submitText) submitText.textContent = 'Confirmar Exoneración ($0.00)';
+  } else {
+    if (payBtn) payBtn.className = 'py-2.5 px-3 rounded-xl font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1.5 bg-surface-container-lowest text-on-surface shadow-sm';
+    if (exonBtn) exonBtn.className = 'py-2.5 px-3 rounded-xl font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1.5 text-on-surface-variant hover:text-on-surface';
+
+    if (payFields) payFields.classList.remove('hidden');
+    if (exonFields) {
+      exonFields.classList.add('hidden');
+      exonFields.classList.remove('flex');
+    }
+
+    if (title) title.textContent = 'Registrar Pago';
+    if (subtitle) subtitle.textContent = 'Cuota de transporte escolar';
+    if (dateLabel) dateLabel.textContent = 'Fecha de pago';
+
+    if (submitBtn) {
+      submitBtn.className = 'w-full h-12 rounded-xl bg-secondary text-on-secondary font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-transform hover:opacity-95';
+    }
+    if (submitIcon) submitIcon.textContent = 'check_circle';
+    if (submitText) submitText.textContent = 'Confirmar y Guardar Pago';
+  }
+};
+
+window.setModalExonReasonQuick = function(reason) {
+  const input = document.getElementById('modalExonReasonInput');
+  if (input) input.value = reason;
+
+  document.querySelectorAll('.modal-exon-chip').forEach(chip => {
+    if (chip.textContent.trim().toLowerCase().includes(reason.toLowerCase().slice(0, 5))) {
+      chip.classList.add('bg-surface-container-high', 'text-on-surface');
+      chip.classList.remove('text-on-surface-variant');
+    } else {
+      chip.classList.remove('bg-surface-container-high', 'text-on-surface');
+      chip.classList.add('text-on-surface-variant');
+    }
+  });
+};
+
+window.onPaymentModalFamilyChange = function() {
+  const familyId = document.getElementById('modalFamilySelect')?.value;
+  if (!familyId) return;
+  const fam = state.cachedData.families.find(f => f.id === Number(familyId));
+  if (fam && document.getElementById('modalAmountInput')) {
+    document.getElementById('modalAmountInput').value = parseFloat(fam.weeklyRate).toFixed(2);
+  }
+};
+
+window.openPaymentModal = function(preselectedFamilyId = null, preselectedWeek = null, initialMode = 'payment') {
   const modal = document.getElementById('paymentModal');
   if (!modal) return;
 
@@ -1387,6 +1707,7 @@ window.openPaymentModal = function(preselectedFamilyId = null, preselectedWeek =
   const refInput = document.getElementById('modalRefInput');
   const dateInput = document.getElementById('modalDateInput');
   const notesInput = document.getElementById('modalNotesInput');
+  const reasonInput = document.getElementById('modalExonReasonInput');
 
   // Populate family select
   familySelect.innerHTML = families.map(f => `
@@ -1394,6 +1715,8 @@ window.openPaymentModal = function(preselectedFamilyId = null, preselectedWeek =
       ${escapeHtml(f.repName)} ($${parseFloat(f.weeklyRate).toFixed(0)}/sem)
     </option>
   `).join('');
+
+  familySelect.onchange = window.onPaymentModalFamilyChange;
 
   // Auto set amount from selected family
   const selectedFamId = preselectedFamilyId || (families[0] ? families[0].id : null);
@@ -1420,9 +1743,24 @@ window.openPaymentModal = function(preselectedFamilyId = null, preselectedWeek =
 
   if (refInput) refInput.value = '';
   if (notesInput) notesInput.value = '';
+  if (reasonInput) reasonInput.value = 'Vacaciones escolares';
+
+  // Restore quick chips for exoneration in modal
+  document.querySelectorAll('.modal-exon-chip').forEach((chip, idx) => {
+    if (idx === 0) {
+      chip.classList.add('bg-surface-container-high', 'text-on-surface');
+      chip.classList.remove('text-on-surface-variant');
+    } else {
+      chip.classList.remove('bg-surface-container-high', 'text-on-surface');
+      chip.classList.add('text-on-surface-variant');
+    }
+  });
 
   // Reset method to Pago Móvil
   selectPaymentMethod('pago_movil');
+
+  // Set mode (default 'payment' or initialMode)
+  setPaymentModalMode(initialMode || 'payment');
 
   // Show modal
   modal.classList.remove('hidden');
@@ -1468,16 +1806,63 @@ window.selectPaymentMethod = function(method) {
 };
 
 window.confirmSavePayment = async function() {
-  const familyId = document.getElementById('modalFamilySelect').value;
-  const week = document.getElementById('modalWeekSelect').value;
-  const amount = document.getElementById('modalAmountInput').value;
-  const method = document.getElementById('modalPaymentMethod').value || 'pago_movil';
-  const reference = document.getElementById('modalRefInput').value;
-  const date = document.getElementById('modalDateInput').value;
+  const familyId = document.getElementById('modalFamilySelect')?.value;
+  const week = document.getElementById('modalWeekSelect')?.value;
+  const date = document.getElementById('modalDateInput')?.value;
   const notes = document.getElementById('modalNotesInput')?.value || '';
 
-  if (!familyId || !amount) {
-    showToast('Por favor completa los datos del pago', 'error');
+  if (!familyId || !week) {
+    showToast('Por favor selecciona la familia y la semana', 'error');
+    return;
+  }
+
+  // MODO EXONERAR
+  if (currentPaymentModalMode === 'exonerate') {
+    const reason = document.getElementById('modalExonReasonInput')?.value.trim() || 'Vacaciones escolares';
+
+    try {
+      const paymentId = await MiRutaDB.registerPayment({
+        familyId: Number(familyId),
+        year: state.selectedYear,
+        month: state.selectedMonth,
+        week: Number(week),
+        amount: 0,
+        monto: 0,
+        method: 'exonerado',
+        reference: `EXO-S${week}`,
+        date: date || new Date().toISOString().split('T')[0],
+        status: 'exonerado',
+        estado: 'exonerado',
+        reason: reason,
+        motivo: reason,
+        notes: notes
+      });
+
+      closePaymentModal();
+      await refreshData();
+      await renderApp();
+
+      showToast(`¡Semana ${week} exonerada ($0.00) con éxito!`, 'beach_access');
+
+      // Mostrar comprobante visual de exoneración
+      setTimeout(() => {
+        showReceiptModal(paymentId, true);
+      }, 400);
+
+    } catch (err) {
+      console.error('Error saving exoneration from payment modal:', err);
+      showToast('Error al exonerar período', 'error');
+    }
+    return;
+  }
+
+  // MODO PAGO NORMAL
+  const amount = document.getElementById('modalAmountInput')?.value;
+  const method = document.getElementById('modalPaymentMethod')?.value || 'pago_movil';
+  const reference = document.getElementById('modalRefInput')?.value;
+
+  if (!amount) {
+    showToast('Por favor completa el monto del pago', 'error');
     return;
   }
 
@@ -1491,6 +1876,7 @@ window.confirmSavePayment = async function() {
       method,
       reference,
       date,
+      status: 'completado',
       notes
     });
 
@@ -1508,6 +1894,212 @@ window.confirmSavePayment = async function() {
   } catch (err) {
     console.error('Error saving payment:', err);
     showToast('Error al registrar pago', 'error');
+  }
+};
+
+// =============================================================
+// MODAL: EXONERAR PAGOS / SEMANAS (VACACIONES Y ASUETOS)
+// =============================================================
+
+let currentExonScope = 'all';
+
+window.openExonerarModal = function(preselectedFamilyId = null) {
+  const modal = document.getElementById('exonerarModal');
+  if (!modal) return;
+
+  const currentYear = state.selectedYear;
+  const currentMonth = state.selectedMonth;
+  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const monthName = monthNames[currentMonth - 1];
+
+  const monthLabel = document.getElementById('exonMonthLabel');
+  if (monthLabel) monthLabel.textContent = `${monthName} ${currentYear}`;
+
+  // Llenar selector de familias
+  const selectEl = document.getElementById('exonFamilySelect');
+  if (selectEl) {
+    const families = state.cachedData.families;
+    selectEl.innerHTML = families.map(f => `
+      <option value="${f.id}" ${preselectedFamilyId && f.id === preselectedFamilyId ? 'selected' : ''}>
+        ${escapeHtml(f.repName)} (${f.phone}) - $${parseFloat(f.weeklyRate).toFixed(0)}/sem
+      </option>
+    `).join('');
+  }
+
+  // Generar checkboxes de semanas según el mes seleccionado
+  const totalWeeks = getWeeksInMonth(currentYear, currentMonth);
+  const weeksContainer = document.getElementById('exonWeeksCheckboxes');
+  if (weeksContainer) {
+    weeksContainer.innerHTML = Array.from({ length: totalWeeks }, (_, idx) => {
+      const weekNum = idx + 1;
+      return `
+        <label class="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-surface-container-low border border-surface-container cursor-pointer select-none has-[:checked]:bg-secondary/10 has-[:checked]:border-secondary transition-all">
+          <input type="checkbox" name="exonWeek" value="${weekNum}" checked class="w-4 h-4 rounded text-secondary focus:ring-0 cursor-pointer" />
+          <span class="font-label-md text-label-md font-bold text-on-surface">Sem ${weekNum}</span>
+        </label>
+      `;
+    }).join('');
+  }
+
+  // Resetear campos
+  const reasonInput = document.getElementById('exonReasonInput');
+  if (reasonInput) reasonInput.value = 'Vacaciones escolares';
+
+  const startInput = document.getElementById('exonStartDateInput');
+  if (startInput) startInput.value = '';
+
+  const endInput = document.getElementById('exonEndDateInput');
+  if (endInput) endInput.value = '';
+
+  const overwriteCheckbox = document.getElementById('exonOverwriteCheckbox');
+  if (overwriteCheckbox) overwriteCheckbox.checked = false;
+
+  // Restaurar chips de motivo
+  document.querySelectorAll('.exon-reason-chip').forEach((chip, idx) => {
+    if (idx === 0) {
+      chip.classList.add('bg-surface-container-high', 'text-on-surface');
+      chip.classList.remove('text-on-surface-variant');
+    } else {
+      chip.classList.remove('bg-surface-container-high', 'text-on-surface');
+      chip.classList.add('text-on-surface-variant');
+    }
+  });
+
+  // Establecer alcance: Si viene familia seleccionada, 'single'; de lo contrario, 'all'
+  setExonScope(preselectedFamilyId ? 'single' : 'all');
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  document.body.classList.add('overflow-hidden');
+};
+
+window.closeExonerarModal = function() {
+  const modal = document.getElementById('exonerarModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  document.body.classList.remove('overflow-hidden');
+};
+
+window.setExonScope = function(scope) {
+  currentExonScope = scope;
+  const singleBtn = document.getElementById('exonScopeSingleBtn');
+  const allBtn = document.getElementById('exonScopeAllBtn');
+  const famContainer = document.getElementById('exonFamilyContainer');
+
+  if (scope === 'single') {
+    if (singleBtn) {
+      singleBtn.className = 'py-2.5 px-3 rounded-xl font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1.5 bg-surface-container-lowest text-on-surface shadow-sm';
+    }
+    if (allBtn) {
+      allBtn.className = 'py-2.5 px-3 rounded-xl font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1.5 text-on-surface-variant hover:text-on-surface';
+    }
+    if (famContainer) famContainer.classList.remove('hidden');
+  } else {
+    if (allBtn) {
+      allBtn.className = 'py-2.5 px-3 rounded-xl font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1.5 bg-surface-container-lowest text-on-surface shadow-sm';
+    }
+    if (singleBtn) {
+      singleBtn.className = 'py-2.5 px-3 rounded-xl font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1.5 text-on-surface-variant hover:text-on-surface';
+    }
+    if (famContainer) famContainer.classList.add('hidden');
+  }
+};
+
+window.setExonReasonQuick = function(reason) {
+  const input = document.getElementById('exonReasonInput');
+  if (input) input.value = reason;
+
+  document.querySelectorAll('.exon-reason-chip').forEach(chip => {
+    if (chip.textContent.trim().toLowerCase().includes(reason.toLowerCase().slice(0, 5))) {
+      chip.classList.add('bg-surface-container-high', 'text-on-surface');
+      chip.classList.remove('text-on-surface-variant');
+    } else {
+      chip.classList.remove('bg-surface-container-high', 'text-on-surface');
+      chip.classList.add('text-on-surface-variant');
+    }
+  });
+};
+
+window.toggleAllExonWeeks = function() {
+  const checkboxes = document.querySelectorAll('#exonWeeksCheckboxes input[type="checkbox"]');
+  if (checkboxes.length === 0) return;
+  const anyUnchecked = Array.from(checkboxes).some(cb => !cb.checked);
+  checkboxes.forEach(cb => { cb.checked = anyUnchecked; });
+};
+
+window.confirmSaveExoneration = async function() {
+  try {
+    const selectedWeeks = Array.from(document.querySelectorAll('#exonWeeksCheckboxes input[type="checkbox"]:checked'))
+      .map(cb => Number(cb.value));
+
+    if (selectedWeeks.length === 0) {
+      showToast('Selecciona al menos una semana a exonerar', 'error');
+      return;
+    }
+
+    let targetFamilyIds = [];
+    if (currentExonScope === 'single') {
+      const famSelect = document.getElementById('exonFamilySelect');
+      const famId = famSelect ? Number(famSelect.value) : null;
+      if (!famId) {
+        showToast('Selecciona una familia para exonerar', 'error');
+        return;
+      }
+      targetFamilyIds = [famId];
+    } else {
+      targetFamilyIds = state.cachedData.families.map(f => f.id);
+      if (targetFamilyIds.length === 0) {
+        showToast('No hay familias registradas en el sistema', 'error');
+        return;
+      }
+    }
+
+    const reasonInput = document.getElementById('exonReasonInput');
+    const reason = (reasonInput && reasonInput.value.trim()) ? reasonInput.value.trim() : 'Vacaciones escolares';
+
+    const startDateInput = document.getElementById('exonStartDateInput');
+    const startDate = (startDateInput && startDateInput.value) ? startDateInput.value : null;
+
+    const endDateInput = document.getElementById('exonEndDateInput');
+    const endDate = (endDateInput && endDateInput.value) ? endDateInput.value : null;
+
+    const overwriteCheckbox = document.getElementById('exonOverwriteCheckbox');
+    const overwritePaid = overwriteCheckbox ? overwriteCheckbox.checked : false;
+
+    // Confirmación si es masivo
+    if (currentExonScope === 'all') {
+      const confirmMsg = `¿Deseas aplicar la exoneración por "${reason}" a todas las familias activas (${targetFamilyIds.length}) para las semanas ${selectedWeeks.join(', ')}?`;
+      if (!confirm(confirmMsg)) return;
+    }
+
+    const createdIds = await MiRutaDB.exonerateWeeks({
+      familyIds: targetFamilyIds,
+      year: state.selectedYear,
+      month: state.selectedMonth,
+      weeks: selectedWeeks,
+      reason,
+      startDate,
+      endDate,
+      overwritePaid
+    });
+
+    closeExonerarModal();
+    await refreshData();
+    await renderApp();
+
+    const scopeDesc = currentExonScope === 'all' ? 'toda la ruta' : 'la familia';
+    showToast(`¡Semanas exoneradas (${createdIds.length} registro(s)) para ${scopeDesc}!`, 'beach_access');
+
+    // Si fue una sola familia y se exoneró 1 sola semana, abrimos comprobante
+    if (currentExonScope === 'single' && createdIds && createdIds.length === 1) {
+      setTimeout(() => {
+        showReceiptModal(createdIds[0]);
+      }, 400);
+    }
+  } catch (err) {
+    console.error('Error aplicando exoneración:', err);
+    showToast('Error al aplicar exoneración', 'error');
   }
 };
 
@@ -1634,6 +2226,7 @@ function drawMiRutaVectorLogo(ctx, x, y, size) {
 
 // Generador de Comprobante Estilo Tarjeta Bancaria (600x820 px en Canvas 2D)
 function generateReceiptCanvas(payment, family, children, settings, logoImg = null) {
+  const isExon = payment.status === 'exonerado' || payment.method === 'exonerado';
   const canvas = document.createElement('canvas');
   const w = 600;
   const h = 820;
@@ -1652,10 +2245,15 @@ function generateReceiptCanvas(payment, family, children, settings, logoImg = nu
   ctx.lineWidth = 1;
   ctx.strokeRect(0, 0, w, h);
 
-  // 1. Encabezado Verde Esmeralda (Estilo Bancario / Pago Móvil)
+  // 1. Encabezado (Verde Esmeralda para Pagos, Azul Océano para Exoneraciones)
   const headerGrad = ctx.createLinearGradient(0, 0, w, 106);
-  headerGrad.addColorStop(0, '#047857');
-  headerGrad.addColorStop(1, '#059669');
+  if (isExon) {
+    headerGrad.addColorStop(0, '#0369A1');
+    headerGrad.addColorStop(1, '#0284C7');
+  } else {
+    headerGrad.addColorStop(0, '#047857');
+    headerGrad.addColorStop(1, '#059669');
+  }
   ctx.fillStyle = headerGrad;
   ctx.fillRect(0, 0, w, 106);
 
@@ -1684,49 +2282,64 @@ function generateReceiptCanvas(payment, family, children, settings, logoImg = nu
     drawMiRutaVectorLogo(ctx, 24, 22, 60);
   }
 
-  // Título oficial solicitado
+  // Título oficial
   ctx.textAlign = 'left';
   ctx.fillStyle = '#FFFFFF';
   ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Plus Jakarta Sans", sans-serif';
-  ctx.fillText('MiRuta • Comprobante de Pago', 96, 52);
+  ctx.fillText(isExon ? 'MiRuta • Comprobante de Exoneración' : 'MiRuta • Comprobante de Pago', 96, 52);
 
-  ctx.fillStyle = '#A7F3D0';
+  ctx.fillStyle = isExon ? '#BAE6FD' : '#A7F3D0';
   ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx.fillText('TRANSPORTE ESCOLAR • SISTEMA ADMINISTRATIVO', 96, 74);
+  ctx.fillText(isExon ? 'TARIFA EXONERADA • PERÍODO VACACIONAL / ASUETO' : 'TRANSPORTE ESCOLAR • SISTEMA ADMINISTRATIVO', 96, 74);
 
   // Píldora de Número de Recibo (Superior Derecha)
   ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-  drawRoundRect(ctx, 460, 36, 116, 32, 10, true, false);
+  drawRoundRect(ctx, 450, 36, 126, 32, 10, true, false);
   ctx.fillStyle = '#FFFFFF';
   ctx.font = 'bold 12.5px monospace';
   ctx.textAlign = 'center';
-  const receiptNumStr = `#REC-${String(payment.id).padStart(4, '0')}`;
-  ctx.fillText(receiptNumStr, 518, 56);
+  const receiptNumStr = isExon 
+    ? `#EXO-${String(payment.id).padStart(4, '0')}`
+    : `#REC-${String(payment.id).padStart(4, '0')}`;
+  ctx.fillText(receiptNumStr, 513, 56);
 
-  // 2. Sello Verde de Pago Confirmado
-  ctx.fillStyle = '#ECFDF5';
-  ctx.strokeStyle = '#10B981';
-  ctx.lineWidth = 2;
-  drawRoundRect(ctx, 160, 126, 280, 40, 20, true, true);
+  // 2. Sello de Estado
+  if (isExon) {
+    ctx.fillStyle = '#F0F9FF';
+    ctx.strokeStyle = '#0284C7';
+    ctx.lineWidth = 2;
+    drawRoundRect(ctx, 140, 126, 320, 40, 20, true, true);
 
-  ctx.fillStyle = '#047857';
-  ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('✓  PAGO CONFIRMADO', 300, 151);
+    ctx.fillStyle = '#0369A1';
+    ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🏖️  CUOTA EXONERADA ($0.00)', 300, 151);
+  } else {
+    ctx.fillStyle = '#ECFDF5';
+    ctx.strokeStyle = '#10B981';
+    ctx.lineWidth = 2;
+    drawRoundRect(ctx, 160, 126, 280, 40, 20, true, true);
+
+    ctx.fillStyle = '#047857';
+    ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓  PAGO CONFIRMADO', 300, 151);
+  }
 
   // 3. Monto Hero Grande
   ctx.fillStyle = '#64748B';
   ctx.font = 'bold 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx.fillText('MONTO TOTAL RECIBIDO', 300, 196);
+  ctx.fillText(isExon ? 'MONTO REGISTRADO (EXONERADO)' : 'MONTO TOTAL RECIBIDO', 300, 196);
 
-  ctx.fillStyle = '#0F172A';
+  ctx.fillStyle = isExon ? '#0284C7' : '#0F172A';
   ctx.font = 'bold 44px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  const amountStr = `$${parseFloat(payment.amount).toFixed(2)}`;
+  const amountStr = isExon ? '$0.00' : `$${parseFloat(payment.amount).toFixed(2)}`;
   ctx.fillText(amountStr, 300, 242);
 
   ctx.fillStyle = '#475569';
   ctx.font = '500 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx.fillText('Cuota de Transporte Escolar', 300, 268);
+  const reasonText = payment.reason || payment.motivo || 'Vacaciones escolares';
+  ctx.fillText(isExon ? `Tarifa Exonerada • ${reasonText}` : 'Cuota de Transporte Escolar', 300, 268);
 
   // 4. Divisor de Perforación de Ticket con Muescas Laterales
   const divY = 292;
@@ -1766,7 +2379,8 @@ function generateReceiptCanvas(payment, family, children, settings, logoImg = nu
   const methodMap = {
     pago_movil: 'Pago Móvil',
     efectivo: 'Efectivo',
-    transferencia: 'Transferencia Bancaria'
+    transferencia: 'Transferencia Bancaria',
+    exonerado: 'Exoneración (Vacaciones)'
   };
   const methodLabel = methodMap[payment.method] || payment.method;
 
@@ -1786,24 +2400,32 @@ function generateReceiptCanvas(payment, family, children, settings, logoImg = nu
   const dateDisplay = `${payment.date} • ${timeFormatted}`;
 
   const rows = [
-    { label: 'Fecha y Hora', value: dateDisplay },
+    { label: isExon ? 'Fecha Registro' : 'Fecha y Hora', value: dateDisplay },
     { label: 'Representante', value: repName, highlight: true },
     { label: 'Estudiante(s)', value: childrenNames },
     { label: 'Colegio', value: schoolName },
     { label: 'Período', value: `Semana ${payment.week} - ${monthName} ${payment.year}` },
-    { label: 'Método de Pago', value: methodLabel },
-    { label: 'Nro. Referencia', value: payment.reference ? `#${payment.reference}` : 'Sin referencia', highlight: Boolean(payment.reference) },
+    ...(isExon ? [
+      { label: 'Condición', value: 'EXONERADO ($0.00)', highlight: true },
+      { label: 'Motivo', value: reasonText },
+      ...(payment.fechaInicio || payment.startDate ? [
+        { label: 'Rango de Fechas', value: `${payment.fechaInicio || payment.startDate} al ${payment.fechaFin || payment.endDate || 'Fin de mes'}` }
+      ] : [])
+    ] : [
+      { label: 'Método de Pago', value: methodLabel },
+      { label: 'Nro. Referencia', value: payment.reference ? `#${payment.reference}` : 'Sin referencia', highlight: Boolean(payment.reference) }
+    ]),
     { label: 'Unidad de Ruta', value: `${settings.vehicleUnit || 'Móvil #04'} (${settings.vehiclePlate || 'MiRuta'})` }
   ];
 
   let currentY = 326;
-  const rowHeight = 36;
+  const rowHeight = rows.length > 8 ? 32 : 36;
 
   rows.forEach((r, idx) => {
     // Fondo alternado
     if (idx % 2 === 0) {
       ctx.fillStyle = '#F8FAFC';
-      drawRoundRect(ctx, 20, currentY - 22, w - 40, 31, 7, true, false);
+      drawRoundRect(ctx, 20, currentY - 22, w - 40, rowHeight - 5, 7, true, false);
     }
 
     // Etiqueta (izquierda)
@@ -1814,7 +2436,7 @@ function generateReceiptCanvas(payment, family, children, settings, logoImg = nu
 
     // Valor (derecha, truncado inteligente)
     ctx.textAlign = 'right';
-    ctx.fillStyle = r.highlight ? '#0F172A' : '#1E293B';
+    ctx.fillStyle = r.highlight ? (isExon ? '#0284C7' : '#0F172A') : '#1E293B';
     ctx.font = r.highlight
       ? 'bold 13.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
       : '500 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -1840,11 +2462,13 @@ function generateReceiptCanvas(payment, family, children, settings, logoImg = nu
   drawRoundRect(ctx, 24, secBoxY, w - 48, 60, 10, true, true);
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#059669';
+  ctx.fillStyle = isExon ? '#0284C7' : '#059669';
   ctx.font = 'bold 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx.fillText('🔒 Operación validada y conciliada exitosamente', 300, secBoxY + 24);
+  ctx.fillText(isExon ? '🏖️ Período registrado como exonerado de cobro en MiRuta' : '🔒 Operación validada y conciliada exitosamente', 300, secBoxY + 24);
 
-  const secHash = `MR-${String(payment.id).padStart(4, '0')}-${payment.date.replace(/-/g, '')}-${(payment.reference || '0000').slice(-4)}`;
+  const secHash = isExon 
+    ? `MR-EXO-${String(payment.id).padStart(4, '0')}-${payment.date.replace(/-/g, '')}-W${payment.week}`
+    : `MR-${String(payment.id).padStart(4, '0')}-${payment.date.replace(/-/g, '')}-${(payment.reference || '0000').slice(-4)}`;
   ctx.fillStyle = '#94A3B8';
   ctx.font = '10.5px monospace';
   ctx.fillText(`CÓDIGO DE VALIDACIÓN: ${secHash}`, 300, secBoxY + 44);
@@ -1876,6 +2500,7 @@ window.showReceiptModal = async function(paymentId, isNewlyCreated = false) {
   const payment = await MiRutaDB.db.payments.get(Number(paymentId));
   if (!payment) return;
 
+  const isExon = payment.status === 'exonerado' || payment.method === 'exonerado';
   const family = await MiRutaDB.db.families.get(payment.familyId);
   const children = await MiRutaDB.getChildrenByFamily(payment.familyId);
   const settings = state.settings || await MiRutaDB.getSettings();
@@ -1893,12 +2518,27 @@ window.showReceiptModal = async function(paymentId, isNewlyCreated = false) {
   const methodLabels = {
     pago_movil: 'Pago Móvil',
     efectivo: 'Efectivo',
-    transferencia: 'Transferencia Bancaria'
+    transferencia: 'Transferencia Bancaria',
+    exonerado: 'Exoneración'
   };
   const methodLabel = methodLabels[payment.method] || payment.method;
+  const reasonText = payment.reason || payment.motivo || 'Vacaciones escolares';
 
   // Texto del recibo para respaldo y portapapeles con firma oficial de marca
-  const receiptText = 
+  const receiptText = isExon ?
+    `🏖️ *CONSTANCIA DE EXONERACIÓN - ${settings.vehicleUnit || 'MiRuta'}* 🚍\n` +
+    `────────────────────\n` +
+    `📅 *Fecha:* ${payment.date}\n` +
+    `👤 *Representante:* ${repName}\n` +
+    `👧 *Alumno(s):* ${childrenNames}\n` +
+    `🏫 *Colegio:* ${schoolName}\n` +
+    `🗓 *Período:* Semana ${payment.week} de ${monthName} ${payment.year}\n` +
+    `💵 *Tarifa:* $0.00 (EXONERADO)\n` +
+    `🏖️ *Motivo:* ${reasonText}\n` +
+    `✅ *Estado:* AL DÍA (SIN DEUDA PENDIENTE)\n` +
+    `────────────────────\n` +
+    `🚐 *MiRuta* • Transporte Escolar`
+    :
     `🧾 *COMPROBANTE DE PAGO - ${settings.vehicleUnit || 'MiRuta'}* 🚍\n` +
     `────────────────────\n` +
     `📅 *Fecha:* ${payment.date}\n` +
@@ -1918,9 +2558,24 @@ window.showReceiptModal = async function(paymentId, isNewlyCreated = false) {
   currentReceiptRepPhone = repPhone;
   currentReceiptText = receiptText;
 
-  // Actualizar badge en la cabecera del modal
+  // Actualizar títulos e ícono en la cabecera del modal
+  const titleEl = document.getElementById('receiptModalTitle');
+  const iconEl = document.getElementById('receiptModalIcon');
+  const iconContainer = document.getElementById('receiptIconContainer');
   const badge = document.getElementById('receiptIdBadge');
-  if (badge) badge.textContent = `#REC-${String(payment.id).padStart(4, '0')}`;
+
+  if (titleEl) titleEl.textContent = isExon ? 'Comprobante de Exoneración' : 'Comprobante de Pago';
+  if (iconEl) iconEl.textContent = isExon ? 'beach_access' : 'verified';
+  if (iconContainer) {
+    if (isExon) {
+      iconContainer.className = 'w-8 h-8 rounded-lg bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 flex items-center justify-center font-bold';
+    } else {
+      iconContainer.className = 'w-8 h-8 rounded-lg bg-secondary-container/50 text-secondary flex items-center justify-center font-bold';
+    }
+  }
+  if (badge) {
+    badge.textContent = isExon ? `#EXO-${String(payment.id).padStart(4, '0')}` : `#REC-${String(payment.id).padStart(4, '0')}`;
+  }
 
   const previewImg = document.getElementById('receiptCanvasImg');
   const spinner = document.getElementById('receiptLoadingSpinner');
@@ -1934,20 +2589,27 @@ window.showReceiptModal = async function(paymentId, isNewlyCreated = false) {
   const copyBtn = document.getElementById('receiptCopyBtn');
   if (copyBtn) {
     copyBtn.onclick = () => {
-      window.copyToClipboard(currentReceiptText, '¡Texto del recibo copiado al portapapeles!');
+      window.copyToClipboard(currentReceiptText, isExon ? '¡Constancia de exoneración copiada!' : '¡Texto del recibo copiado al portapapeles!');
     };
   }
 
-  // Conectar botón de anular pago
+  // Conectar botón de anular pago / exoneración
   const delBtn = document.getElementById('receiptDeleteBtn');
   if (delBtn) {
+    delBtn.innerHTML = `
+      <span class="material-symbols-outlined text-[16px]">delete</span>
+      <span>${isExon ? 'Anular esta exoneración' : 'Anular este pago'}</span>
+    `;
     delBtn.onclick = async () => {
-      if (confirm(`¿Deseas anular y eliminar este pago de $${payment.amount}?`)) {
+      const confirmMsg = isExon
+        ? `¿Deseas anular esta exoneración de la Semana ${payment.week}? La semana volverá a quedar pendiente de cobro.`
+        : `¿Deseas anular y eliminar este pago de $${payment.amount}?`;
+      if (confirm(confirmMsg)) {
         await MiRutaDB.deletePayment(payment.id);
         closeReceiptModal();
         await refreshData();
         await renderApp();
-        showToast('Pago eliminado correctamente', 'delete');
+        showToast(isExon ? 'Exoneración anulada correctamente' : 'Pago eliminado correctamente', 'delete');
       }
     };
   }
@@ -2007,7 +2669,9 @@ window.shareReceiptImage = async function() {
     currentReceiptBlob = blob;
   }
 
-  const filename = `comprobante_miruta_pago_${currentReceiptPayment.id}_sem${currentReceiptPayment.week}.png`;
+  const isExon = currentReceiptPayment.status === 'exonerado' || currentReceiptPayment.method === 'exonerado';
+  const prefix = isExon ? 'exoneracion' : 'pago';
+  const filename = `comprobante_miruta_${prefix}_${currentReceiptPayment.id}_sem${currentReceiptPayment.week}.png`;
   const file = new File([blob], filename, { type: 'image/png' });
 
   // 1. Web Share API nativa con soporte de archivos (envío como imagen a WhatsApp en móviles)
@@ -2015,8 +2679,10 @@ window.shareReceiptImage = async function() {
     try {
       await navigator.share({
         files: [file],
-        title: `Comprobante de Pago #${currentReceiptPayment.id} - MiRuta`,
-        text: `Comprobante de pago de transporte escolar MiRuta para ${currentReceiptRepName}.`
+        title: isExon ? `Constancia de Exoneración #${currentReceiptPayment.id} - MiRuta` : `Comprobante de Pago #${currentReceiptPayment.id} - MiRuta`,
+        text: isExon 
+          ? `Constancia de tarifa exonerada de transporte escolar MiRuta para ${currentReceiptRepName}.`
+          : `Comprobante de pago de transporte escolar MiRuta para ${currentReceiptRepName}.`
       });
       showToast('¡Comprobante compartido!', 'check_circle');
       return;
@@ -2045,7 +2711,9 @@ window.downloadReceiptPng = function() {
     showToast('El comprobante no está listo aún', 'error');
     return;
   }
-  const filename = `comprobante_miruta_pago_${currentReceiptPayment.id}_sem${currentReceiptPayment.week}.png`;
+  const isExon = currentReceiptPayment.status === 'exonerado' || currentReceiptPayment.method === 'exonerado';
+  const prefix = isExon ? 'exoneracion' : 'pago';
+  const filename = `comprobante_miruta_${prefix}_${currentReceiptPayment.id}_sem${currentReceiptPayment.week}.png`;
   const link = document.createElement('a');
   link.download = filename;
   link.href = currentReceiptCanvas.toDataURL('image/png');
@@ -2459,11 +3127,28 @@ function setupEventListeners() {
     renderChildrenCards();
   });
 
+  // Inicio Search
+  const inicioSearchInput = document.getElementById('inicioSearchInput');
+  const inicioSearchClearBtn = document.getElementById('inicioSearchClearBtn');
+  if (inicioSearchInput) {
+    inicioSearchInput.addEventListener('input', (e) => {
+      state.inicioSearch = e.target.value;
+      if (inicioSearchClearBtn) {
+        inicioSearchClearBtn.classList.toggle('hidden', !e.target.value);
+      }
+      renderChildrenCards();
+    });
+  }
+
   // Family Search & Filter
   const famSearchInput = document.getElementById('familySearchInput');
+  const famSearchClearBtn = document.getElementById('familySearchClearBtn');
   if (famSearchInput) {
     famSearchInput.addEventListener('input', (e) => {
       state.familySearch = e.target.value;
+      if (famSearchClearBtn) {
+        famSearchClearBtn.classList.toggle('hidden', !e.target.value);
+      }
       renderFamilias();
     });
   }
@@ -2503,9 +3188,13 @@ function setupEventListeners() {
 
   // Payment Search & Filter
   const paySearchInput = document.getElementById('paymentSearchInput');
+  const paySearchClearBtn = document.getElementById('paymentSearchClearBtn');
   if (paySearchInput) {
     paySearchInput.addEventListener('input', (e) => {
       state.paymentSearch = e.target.value;
+      if (paySearchClearBtn) {
+        paySearchClearBtn.classList.toggle('hidden', !e.target.value);
+      }
       renderPagos();
     });
   }
@@ -2621,6 +3310,16 @@ function escapeHtml(text) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function normalizeSearchText(str) {
+  if (!str) return '';
+  return str
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
 }
 
 // -------------------------------------------------------------

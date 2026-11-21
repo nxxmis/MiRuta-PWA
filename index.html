@@ -164,6 +164,21 @@
     .pb-safe {
       padding-bottom: env(safe-area-inset-bottom, 0px);
     }
+    /* Ocultar badge flotante y drawers inyectados por Netlify */
+    iframe[src*="netlify"],
+    [data-netlify-deploy-id],
+    #netlify-identity-widget,
+    .netlify-drawer,
+    [class*="netlify-badge"],
+    [id*="netlify-drawer"],
+    [data-netlify-drawer] {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      opacity: 0 !important;
+      height: 0 !important;
+      width: 0 !important;
+    }
     /* Estilos para impresión y guardado como PDF de la Guía */
     @media print {
       body {
@@ -331,13 +346,25 @@
           </button>
         </div>
 
+        <!-- Barra de Búsqueda Instantánea en Inicio -->
+        <div class="relative flex items-center">
+          <span class="material-symbols-outlined absolute left-3.5 text-on-surface-variant text-[20px] pointer-events-none">search</span>
+          <input id="inicioSearchInput" class="w-full h-11 pl-11 pr-10 rounded-2xl bg-surface-container-lowest border border-surface-container/60 shadow-[0_2px_8px_rgba(0,0,0,0.02)] font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/70 focus:outline-none focus:border-primary transition-all" placeholder="Buscar niño o representante..." type="text" autocomplete="off" />
+          <button id="inicioSearchClearBtn" type="button" onclick="clearInicioSearch()" class="hidden absolute right-2.5 w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant text-[14px] font-bold active:scale-95 transition-all" title="Limpiar búsqueda">✕</button>
+        </div>
+
         <div class="flex items-center justify-between px-1">
-          <span class="font-label-sm text-label-sm text-on-surface-variant font-bold uppercase tracking-wider">
-            Alumnos del Turno
-          </span>
-          <span class="font-body-sm text-body-sm text-on-surface-variant">
-            Toca el estado para marcar asistencia
-          </span>
+          <div class="flex items-center gap-2">
+            <span class="font-label-sm text-label-sm text-on-surface-variant font-bold uppercase tracking-wider">
+              Alumnos del Turno
+            </span>
+            <span id="studentsCountBadge" class="px-2 py-0.5 rounded-full bg-surface-container font-label-sm text-label-sm text-on-surface font-extrabold">0</span>
+          </div>
+          <!-- Botón Ordenar Ruta -->
+          <button id="toggleReorderBtn" type="button" onclick="toggleReorderMode()" class="px-3 py-1 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 border border-surface-container/60" title="Ordenar lista de recogida y entrega">
+            <span id="reorderBtnIcon" class="material-symbols-outlined text-[17px] text-primary">swap_vert</span>
+            <span id="reorderBtnText">Ordenar ruta</span>
+          </button>
         </div>
       </section>
 
@@ -372,7 +399,8 @@
       <!-- Barra de Búsqueda Interactiva -->
       <div class="relative flex items-center">
         <span class="material-symbols-outlined absolute left-3.5 text-on-surface-variant text-[20px] pointer-events-none">search</span>
-        <input id="familySearchInput" class="w-full h-12 pl-11 pr-4 rounded-2xl bg-surface-container-lowest border border-surface-container/60 shadow-[0_2px_8px_rgba(0,0,0,0.02)] font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/70 focus:outline-none focus:border-primary transition-all" placeholder="Buscar familia, niño, colegio o dirección..." type="search" />
+        <input id="familySearchInput" class="w-full h-12 pl-11 pr-10 rounded-2xl bg-surface-container-lowest border border-surface-container/60 shadow-[0_2px_8px_rgba(0,0,0,0.02)] font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/70 focus:outline-none focus:border-primary transition-all" placeholder="Buscar familia, niño, colegio o dirección..." type="text" autocomplete="off" />
+        <button id="familySearchClearBtn" type="button" onclick="clearFamilySearch()" class="hidden absolute right-3 w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant text-[14px] font-bold active:scale-95 transition-all" title="Limpiar búsqueda">✕</button>
       </div>
 
       <!-- Píldoras de Filtro Horizontal -->
@@ -452,10 +480,23 @@
         </div>
       </section>
 
+      <!-- Botones de Acción de Pagos: Registrar Pago y Exonerar -->
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" onclick="openPaymentModal()" class="h-11 px-3 rounded-xl bg-secondary text-on-secondary font-label-md text-label-md font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all hover:opacity-95">
+          <span class="material-symbols-outlined text-[19px]">add_circle</span>
+          <span>Registrar Pago</span>
+        </button>
+        <button type="button" onclick="openExonerarModal()" class="h-11 px-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-md text-label-md font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all border border-surface-container">
+          <span class="material-symbols-outlined text-[19px] text-tertiary">beach_access</span>
+          <span>Exonerar Semanas</span>
+        </button>
+      </div>
+
       <!-- Barra de Búsqueda Interactiva -->
       <div class="relative flex items-center">
         <span class="material-symbols-outlined absolute left-3.5 text-on-surface-variant text-[20px] pointer-events-none">search</span>
-        <input id="paymentSearchInput" class="w-full h-12 pl-11 pr-4 rounded-2xl bg-surface-container-lowest border border-surface-container/60 shadow-[0_2px_8px_rgba(0,0,0,0.02)] font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/70 focus:outline-none focus:border-primary transition-all" placeholder="Buscar por familia o niño..." type="search" />
+        <input id="paymentSearchInput" class="w-full h-12 pl-11 pr-10 rounded-2xl bg-surface-container-lowest border border-surface-container/60 shadow-[0_2px_8px_rgba(0,0,0,0.02)] font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/70 focus:outline-none focus:border-primary transition-all" placeholder="Buscar por familia o niño..." type="text" autocomplete="off" />
+        <button id="paymentSearchClearBtn" type="button" onclick="clearPaymentSearch()" class="hidden absolute right-3 w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant text-[14px] font-bold active:scale-95 transition-all" title="Limpiar búsqueda">✕</button>
       </div>
 
       <!-- Filtro Rápido Segmentado -->
@@ -734,13 +775,25 @@
 
       <div class="flex items-start justify-between gap-space-sm">
         <div class="flex flex-col min-w-0">
-          <h3 class="font-headline-sm text-headline-sm text-on-surface font-extrabold tracking-tight">
+          <h3 id="paymentModalTitle" class="font-headline-sm text-headline-sm text-on-surface font-extrabold tracking-tight">
             Registrar Pago
           </h3>
-          <span class="text-body-sm text-on-surface-variant font-medium">Cuota de transporte escolar</span>
+          <span id="paymentModalSubtitle" class="text-body-sm text-on-surface-variant font-medium">Cuota de transporte escolar</span>
         </div>
         <button onclick="closePaymentModal()" aria-label="Cerrar modal" class="w-9 h-9 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant shrink-0 transition-colors">
           <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <!-- Selector de Modo: Registrar Pago vs Exonerar este período -->
+      <div class="grid grid-cols-2 gap-1.5 bg-surface-container-low p-1 rounded-2xl border border-surface-container">
+        <button id="modalModePaymentBtn" type="button" onclick="setPaymentModalMode('payment')" class="py-2.5 px-3 rounded-xl font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1.5 bg-surface-container-lowest text-on-surface shadow-sm">
+          <span class="material-symbols-outlined text-[18px] text-secondary">payments</span>
+          <span>Registrar Pago</span>
+        </button>
+        <button id="modalModeExonerateBtn" type="button" onclick="setPaymentModalMode('exonerate')" class="py-2.5 px-3 rounded-xl font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1.5 text-on-surface-variant hover:text-on-surface">
+          <span class="material-symbols-outlined text-[18px] text-tertiary">beach_access</span>
+          <span>Exonerar período</span>
         </button>
       </div>
 
@@ -748,7 +801,7 @@
       <div class="grid grid-cols-3 gap-2">
         <div class="col-span-2 flex flex-col gap-1">
           <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Familia / Representante</label>
-          <select id="modalFamilySelect" class="w-full h-11 px-3 rounded-xl bg-surface-container-low font-body-md text-on-surface border border-surface-container focus:outline-none focus:border-primary">
+          <select id="modalFamilySelect" onchange="onPaymentModalFamilyChange()" class="w-full h-11 px-3 rounded-xl bg-surface-container-low font-body-md text-on-surface border border-surface-container focus:outline-none focus:border-primary">
             <!-- Opciones generadas -->
           </select>
         </div>
@@ -760,57 +813,104 @@
         </div>
       </div>
 
-      <!-- Método de pago -->
-      <div class="flex flex-col gap-space-xs">
-        <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-bold">
-          Método de pago
-        </label>
-        <div class="grid grid-cols-3 gap-2">
-          <button id="methodBtn_pago_movil" type="button" onclick="selectPaymentMethod('pago_movil')" class="method-btn h-12 rounded-xl bg-secondary-fixed text-on-secondary-fixed font-label-md text-label-md font-bold flex flex-col items-center justify-center gap-0.5 shadow-sm transition-all border border-secondary">
-            <div class="flex items-center gap-1">
-              <span class="material-symbols-outlined text-[18px]">phone_iphone</span>
-              <span>Pago Móvil</span>
-            </div>
-          </button>
-          <button id="methodBtn_efectivo" type="button" onclick="selectPaymentMethod('efectivo')" class="method-btn h-12 rounded-xl bg-surface-container-low text-on-surface-variant hover:bg-surface-container font-label-md text-label-md font-bold flex flex-col items-center justify-center gap-0.5 transition-all">
-            <div class="flex items-center gap-1">
-              <span class="material-symbols-outlined text-[18px]">payments</span>
-              <span>Efectivo</span>
-            </div>
-          </button>
-          <button id="methodBtn_transferencia" type="button" onclick="selectPaymentMethod('transferencia')" class="method-btn h-12 rounded-xl bg-surface-container-low text-on-surface-variant hover:bg-surface-container font-label-md text-label-md font-bold flex flex-col items-center justify-center gap-0.5 transition-all">
-            <div class="flex items-center gap-1">
-              <span class="material-symbols-outlined text-[18px]">account_balance</span>
-              <span>Transferencia</span>
-            </div>
-          </button>
-        </div>
-        <input type="hidden" id="modalPaymentMethod" value="pago_movil" />
-      </div>
-
-      <!-- Monto a cobrar -->
-      <div class="flex flex-col gap-space-xs">
-        <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Monto a cobrar ($)</label>
-        <div class="relative flex items-center">
-          <div class="absolute left-3.5 flex items-center pointer-events-none text-secondary font-headline-sm text-headline-sm font-extrabold">
-            <span class="material-symbols-outlined text-[20px] mr-1">attach_money</span>
+      <!-- SECCIÓN MODO PAGO: Método, Monto, Referencia -->
+      <div id="modalPaymentFieldsSection" class="flex flex-col gap-space-md">
+        <!-- Método de pago -->
+        <div class="flex flex-col gap-space-xs">
+          <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-bold">
+            Método de pago
+          </label>
+          <div class="grid grid-cols-3 gap-2">
+            <button id="methodBtn_pago_movil" type="button" onclick="selectPaymentMethod('pago_movil')" class="method-btn h-12 rounded-xl bg-secondary-fixed text-on-secondary-fixed font-label-md text-label-md font-bold flex flex-col items-center justify-center gap-0.5 shadow-sm transition-all border border-secondary">
+              <div class="flex items-center gap-1">
+                <span class="material-symbols-outlined text-[18px]">phone_iphone</span>
+                <span>Pago Móvil</span>
+              </div>
+            </button>
+            <button id="methodBtn_efectivo" type="button" onclick="selectPaymentMethod('efectivo')" class="method-btn h-12 rounded-xl bg-surface-container-low text-on-surface-variant hover:bg-surface-container font-label-md text-label-md font-bold flex flex-col items-center justify-center gap-0.5 transition-all">
+              <div class="flex items-center gap-1">
+                <span class="material-symbols-outlined text-[18px]">payments</span>
+                <span>Efectivo</span>
+              </div>
+            </button>
+            <button id="methodBtn_transferencia" type="button" onclick="selectPaymentMethod('transferencia')" class="method-btn h-12 rounded-xl bg-surface-container-low text-on-surface-variant hover:bg-surface-container font-label-md text-label-md font-bold flex flex-col items-center justify-center gap-0.5 transition-all">
+              <div class="flex items-center gap-1">
+                <span class="material-symbols-outlined text-[18px]">account_balance</span>
+                <span>Transferencia</span>
+              </div>
+            </button>
           </div>
-          <input id="modalAmountInput" type="number" step="0.5" class="w-full h-12 pl-10 pr-4 rounded-xl bg-surface-container-low font-headline-sm text-headline-sm text-on-surface font-extrabold focus:outline-none focus:bg-surface-container-lowest transition-colors border border-surface-container" value="35.00" />
+          <input type="hidden" id="modalPaymentMethod" value="pago_movil" />
+        </div>
+
+        <!-- Monto a cobrar -->
+        <div class="flex flex-col gap-space-xs">
+          <div class="flex items-center justify-between">
+            <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Monto a cobrar ($)</label>
+            <button type="button" onclick="setPaymentModalMode('exonerate')" class="text-tertiary hover:underline font-label-sm text-[12px] font-bold flex items-center gap-1">
+              <span class="material-symbols-outlined text-[14px]">beach_access</span>
+              <span>¿Exonerar este período?</span>
+            </button>
+          </div>
+          <div class="relative flex items-center">
+            <div class="absolute left-3.5 flex items-center pointer-events-none text-secondary font-headline-sm text-headline-sm font-extrabold">
+              <span class="material-symbols-outlined text-[20px] mr-1">attach_money</span>
+            </div>
+            <input id="modalAmountInput" type="number" step="0.5" class="w-full h-12 pl-10 pr-4 rounded-xl bg-surface-container-low font-headline-sm text-headline-sm text-on-surface font-extrabold focus:outline-none focus:bg-surface-container-lowest transition-colors border border-surface-container" value="35.00" />
+          </div>
+        </div>
+
+        <!-- Últimos dígitos de referencia -->
+        <div id="modalRefContainer" class="flex flex-col gap-space-xs transition-opacity">
+          <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Últimos dígitos de referencia</label>
+          <div class="relative flex items-center">
+            <span class="material-symbols-outlined absolute left-3.5 text-on-surface-variant text-[20px]">receipt_long</span>
+            <input id="modalRefInput" type="text" class="w-full h-12 pl-10 pr-4 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/70 focus:outline-none focus:bg-surface-container-lowest transition-colors border border-surface-container" placeholder="Ej: 8492" />
+          </div>
         </div>
       </div>
 
-      <!-- Últimos dígitos de referencia -->
-      <div id="modalRefContainer" class="flex flex-col gap-space-xs transition-opacity">
-        <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Últimos dígitos de referencia</label>
-        <div class="relative flex items-center">
-          <span class="material-symbols-outlined absolute left-3.5 text-on-surface-variant text-[20px]">receipt_long</span>
-          <input id="modalRefInput" type="text" class="w-full h-12 pl-10 pr-4 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/70 focus:outline-none focus:bg-surface-container-lowest transition-colors border border-surface-container" placeholder="Ej: 8492" />
+      <!-- SECCIÓN MODO EXONERACIÓN: Aviso $0.00 y Motivo Rápido -->
+      <div id="modalExonerateFieldsSection" class="hidden flex-col gap-space-sm animate-in fade-in duration-200">
+        <!-- Callout $0.00 -->
+        <div class="p-3.5 rounded-2xl bg-tertiary-container/30 border border-tertiary/20 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-tertiary text-on-tertiary flex items-center justify-center shrink-0">
+            <span class="material-symbols-outlined text-[22px]">beach_access</span>
+          </div>
+          <div class="flex flex-col min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="font-headline-sm text-headline-sm font-black text-tertiary leading-tight">$0.00</span>
+              <span class="px-2 py-0.5 rounded-md bg-tertiary/20 text-on-tertiary-container font-label-sm font-bold uppercase tracking-wider text-[11px]">Exonerado</span>
+            </div>
+            <span class="font-body-xs text-on-surface-variant">Sin cobro de tarifa ni deuda acumulada para la familia en esta semana.</span>
+          </div>
+        </div>
+
+        <!-- Motivo de Exoneración -->
+        <div class="flex flex-col gap-1.5">
+          <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Motivo de exoneración</label>
+          <!-- Chips de motivo rápido -->
+          <div class="flex flex-wrap gap-1.5">
+            <button type="button" onclick="setModalExonReasonQuick('Vacaciones escolares')" class="modal-exon-chip px-2.5 py-1 rounded-lg bg-surface-container-high text-on-surface font-label-sm text-[12px] font-bold border border-surface-container transition-all">
+              🏖️ Vacaciones
+            </button>
+            <button type="button" onclick="setModalExonReasonQuick('Día festivo / Feriado')" class="modal-exon-chip px-2.5 py-1 rounded-lg bg-surface-container-low text-on-surface-variant font-label-sm text-[12px] font-bold border border-surface-container hover:bg-surface-container transition-all">
+              📅 Feriado
+            </button>
+            <button type="button" onclick="setModalExonReasonQuick('Suspensión de clases')" class="modal-exon-chip px-2.5 py-1 rounded-lg bg-surface-container-low text-on-surface-variant font-label-sm text-[12px] font-bold border border-surface-container hover:bg-surface-container transition-all">
+              🛑 Suspensión
+            </button>
+            <button type="button" onclick="setModalExonReasonQuick('Acuerdo especial')" class="modal-exon-chip px-2.5 py-1 rounded-lg bg-surface-container-low text-on-surface-variant font-label-sm text-[12px] font-bold border border-surface-container hover:bg-surface-container transition-all">
+              🤝 Acuerdo
+            </button>
+          </div>
+          <input id="modalExonReasonInput" type="text" class="w-full h-11 px-3.5 rounded-xl bg-surface-container-low font-body-md text-on-surface border border-surface-container focus:outline-none focus:border-primary" value="Vacaciones escolares" placeholder="Motivo o justificación..." />
         </div>
       </div>
 
-      <!-- Fecha de pago -->
+      <!-- Fecha de pago / registro -->
       <div class="flex flex-col gap-space-xs">
-        <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Fecha de pago</label>
+        <label id="modalDateLabel" class="font-label-sm text-label-sm text-on-surface-variant font-bold">Fecha de pago</label>
         <div class="relative flex items-center">
           <span class="material-symbols-outlined absolute left-3.5 text-primary text-[20px]">calendar_today</span>
           <input id="modalDateInput" type="date" class="w-full h-12 pl-10 pr-4 rounded-xl bg-surface-container-low font-label-lg text-label-lg text-on-surface focus:outline-none focus:bg-surface-container-lowest transition-colors border border-surface-container" />
@@ -820,16 +920,143 @@
       <!-- Notas opcionales -->
       <div class="flex flex-col gap-space-xs">
         <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Notas u observaciones (opcional)</label>
-        <input id="modalNotesInput" type="text" class="w-full h-10 px-3.5 rounded-xl bg-surface-container-low font-body-sm text-on-surface border border-surface-container focus:outline-none" placeholder="Ej: Pagado por abuela en efectivo..." />
+        <input id="modalNotesInput" type="text" class="w-full h-10 px-3.5 rounded-xl bg-surface-container-low font-body-sm text-on-surface border border-surface-container focus:outline-none" placeholder="Ej: Observación o detalle del acuerdo..." />
       </div>
 
       <!-- Botón de Confirmación -->
       <div class="flex flex-col gap-2 pt-space-xs mt-1">
-        <button type="button" onclick="confirmSavePayment()" class="w-full h-12 rounded-xl bg-secondary text-on-secondary font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-transform hover:opacity-95">
-          <span class="material-symbols-outlined text-[20px]">check_circle</span>
-          <span>Confirmar y Guardar Pago</span>
+        <button id="modalSubmitPaymentBtn" type="button" onclick="confirmSavePayment()" class="w-full h-12 rounded-xl bg-secondary text-on-secondary font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-transform hover:opacity-95">
+          <span id="modalSubmitPaymentIcon" class="material-symbols-outlined text-[20px]">check_circle</span>
+          <span id="modalSubmitPaymentText">Confirmar y Guardar Pago</span>
         </button>
         <button type="button" onclick="closePaymentModal()" class="w-full h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md transition-colors active:scale-95">
+          Cancelar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- MODAL BOTTOM SHEET: EXONERAR PAGOS / SEMANAS                   -->
+  <!-- ============================================================== -->
+  <div id="exonerarModal" onclick="if(event.target === this) closeExonerarModal()" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm items-end sm:items-center justify-center animate-in fade-in duration-200 p-0 sm:p-4">
+    <div class="w-full max-w-md bg-surface-container-lowest rounded-t-3xl sm:rounded-3xl p-space-md sm:p-space-lg shadow-2xl flex flex-col gap-space-md animate-in slide-in-from-bottom duration-300 max-h-[92vh] overflow-y-auto no-scrollbar pb-safe border border-surface-container">
+      
+      <div class="w-12 h-1.5 bg-surface-container-highest rounded-full self-center shrink-0 mb-1 sm:hidden"></div>
+
+      <!-- Cabecera del Modal -->
+      <div class="flex items-start justify-between gap-space-sm border-b border-surface-container pb-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-10 h-10 rounded-2xl bg-tertiary-container text-on-tertiary-container flex items-center justify-center font-bold shrink-0 shadow-sm">
+            <span class="material-symbols-outlined text-[22px] text-tertiary">beach_access</span>
+          </div>
+          <div class="flex flex-col min-w-0">
+            <h3 class="font-headline-sm text-headline-sm text-on-surface font-black tracking-tight truncate">
+              Exonerar Cuotas
+            </h3>
+            <span class="text-body-sm text-on-surface-variant font-medium truncate">Vacaciones escolares o días no laborables</span>
+          </div>
+        </div>
+        <button onclick="closeExonerarModal()" aria-label="Cerrar modal" class="w-9 h-9 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant shrink-0 transition-colors">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <!-- 1. Alcance: Individual vs Toda la Ruta (Grupal) -->
+      <div class="flex flex-col gap-1.5">
+        <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Aplicar a:</label>
+        <div class="grid grid-cols-2 gap-2 bg-surface-container-low p-1 rounded-2xl border border-surface-container">
+          <button id="exonScopeSingleBtn" type="button" onclick="setExonScope('single')" class="py-2.5 px-3 rounded-xl font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1.5 bg-surface-container-lowest text-on-surface shadow-sm">
+            <span class="material-symbols-outlined text-[18px] text-primary">person</span>
+            <span>Una Familia</span>
+          </button>
+          <button id="exonScopeAllBtn" type="button" onclick="setExonScope('all')" class="py-2.5 px-3 rounded-xl font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1.5 text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined text-[18px] text-tertiary">groups</span>
+            <span>Toda la Ruta</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. Selector de Familia (Oculto cuando se selecciona Toda la Ruta) -->
+      <div id="exonFamilyContainer" class="flex flex-col gap-1">
+        <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Seleccionar Familia</label>
+        <select id="exonFamilySelect" class="w-full h-11 px-3.5 rounded-xl bg-surface-container-low font-body-md text-on-surface border border-surface-container focus:outline-none focus:border-primary">
+          <!-- Opciones dinámicas -->
+        </select>
+      </div>
+
+      <!-- 3. Selección de Semanas del Mes -->
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">
+            Semanas a Exonerar (<span id="exonMonthLabel">Mes actual</span>)
+          </label>
+          <button type="button" onclick="toggleAllExonWeeks()" class="text-[12px] font-bold text-primary hover:underline">
+            Alternar todas
+          </button>
+        </div>
+        <div id="exonWeeksCheckboxes" class="grid grid-cols-4 sm:grid-cols-5 gap-2">
+          <!-- Checkboxes dinámicos de semanas -->
+        </div>
+      </div>
+
+      <!-- 4. Rango de Fechas (Opcional) -->
+      <div class="grid grid-cols-2 gap-2">
+        <div class="flex flex-col gap-1">
+          <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Desde (opcional)</label>
+          <input id="exonStartDateInput" type="date" class="w-full h-10 px-3 rounded-xl bg-surface-container-low font-body-sm text-on-surface border border-surface-container focus:outline-none focus:border-primary" />
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Hasta (opcional)</label>
+          <input id="exonEndDateInput" type="date" class="w-full h-10 px-3 rounded-xl bg-surface-container-low font-body-sm text-on-surface border border-surface-container focus:outline-none focus:border-primary" />
+        </div>
+      </div>
+
+      <!-- 5. Motivo de la Exoneración -->
+      <div class="flex flex-col gap-1.5">
+        <label class="font-label-sm text-label-sm text-on-surface-variant font-bold">Motivo</label>
+        <!-- Pastillas de selección rápida -->
+        <div class="flex flex-wrap gap-1.5">
+          <button type="button" onclick="setExonReasonQuick('Vacaciones escolares')" class="exon-reason-chip px-2.5 py-1 rounded-lg bg-surface-container text-on-surface font-label-sm text-label-sm font-semibold transition-colors hover:bg-surface-container-high">
+            🏖️ Vacaciones
+          </button>
+          <button type="button" onclick="setExonReasonQuick('Suspensión de clases')" class="exon-reason-chip px-2.5 py-1 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm font-medium transition-colors">
+            🛑 Suspensión
+          </button>
+          <button type="button" onclick="setExonReasonQuick('Días no laborables / Feriados')" class="exon-reason-chip px-2.5 py-1 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm font-medium transition-colors">
+            📅 Feriado
+          </button>
+          <button type="button" onclick="setExonReasonQuick('Acuerdo especial')" class="exon-reason-chip px-2.5 py-1 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm font-medium transition-colors">
+            🤝 Acuerdo
+          </button>
+        </div>
+        <input id="exonReasonInput" type="text" value="Vacaciones escolares" class="w-full h-10 px-3.5 rounded-xl bg-surface-container-low font-body-md text-on-surface border border-surface-container focus:outline-none focus:border-primary" placeholder="Especificar motivo..." />
+      </div>
+
+      <!-- 6. Opción sobrepagos previos -->
+      <div id="exonOverwriteBox" class="flex items-center gap-2 bg-surface-container-low p-2.5 rounded-xl border border-surface-container">
+        <input id="exonOverwriteCheckbox" type="checkbox" class="w-4 h-4 rounded text-secondary focus:ring-0 cursor-pointer" />
+        <label for="exonOverwriteCheckbox" class="text-body-sm text-on-surface-variant select-none cursor-pointer">
+          Reemplazar cuotas si ya tenían pago registrado
+        </label>
+      </div>
+
+      <!-- Callout Informativo -->
+      <div class="bg-tertiary-container/20 border border-tertiary/20 p-3 rounded-2xl flex items-start gap-2.5 text-on-surface">
+        <span class="material-symbols-outlined text-[20px] text-tertiary shrink-0 mt-0.5">info</span>
+        <p class="text-body-sm text-on-surface-variant leading-tight">
+          Las cuotas exoneradas se fijan en <strong>$0.00</strong>, no sumarán a las deudas morosas y las familias figurarán <strong>al día ✨</strong>.
+        </p>
+      </div>
+
+      <!-- Botones de Acción -->
+      <div class="flex flex-col gap-2 pt-1">
+        <button type="button" onclick="confirmSaveExoneration()" class="w-full h-12 rounded-xl bg-secondary text-on-secondary font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all hover:opacity-95">
+          <span class="material-symbols-outlined text-[20px]">check_circle</span>
+          <span>Aplicar Exoneración</span>
+        </button>
+        <button type="button" onclick="closeExonerarModal()" class="w-full h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md font-bold transition-colors active:scale-95">
           Cancelar
         </button>
       </div>
@@ -846,10 +1073,10 @@
       <!-- Encabezado Modal -->
       <div class="flex items-center justify-between border-b border-surface-container pb-2">
         <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-lg bg-secondary-container/50 text-secondary flex items-center justify-center font-bold">
-            <span class="material-symbols-outlined text-[18px]">verified</span>
+          <div id="receiptIconContainer" class="w-8 h-8 rounded-lg bg-secondary-container/50 text-secondary flex items-center justify-center font-bold">
+            <span id="receiptModalIcon" class="material-symbols-outlined text-[18px]">verified</span>
           </div>
-          <span class="font-headline-sm text-headline-sm text-on-surface font-black">Comprobante de Pago</span>
+          <span id="receiptModalTitle" class="font-headline-sm text-headline-sm text-on-surface font-black">Comprobante de Pago</span>
         </div>
         <span id="receiptIdBadge" class="font-label-sm text-label-sm px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-extrabold">#REC-001</span>
       </div>

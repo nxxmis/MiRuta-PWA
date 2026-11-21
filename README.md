@@ -61,22 +61,53 @@
     🚐 *MiRuta* • Transporte Escolar
     ```
 
-### 6. 📅 Asistencia Diaria Estricta por Fecha del Sistema
+### 6. 🏖️ Exoneración de Cuotas / Semanas (Vacaciones y Asuetos Escolares)
+- **Cero Deudas Injustas en Vacaciones:** Permite registrar períodos no laborables, vacaciones de Navidad, Carnaval, Semana Santa o suspensiones de clases fijando la cuota en `$0.00`, evitando que las familias se marquen en rojo como deudoras morosas.
+- **Acceso Directo Integrado en "Registrar Pago":** Al abrir la ventana de cobro de una familia o cuota semanal específica, se puede alternar instantáneamente mediante un conmutador superior o enlace rápido al modo *"Exonerar período"*. Esto fija de inmediato la cuota en `$0.00`, despliega las pastillas de motivo rápido ("🏖️ Vacaciones", "📅 Feriado", etc.) y guarda la exoneración en un solo toque sin tener que cerrar el modal ni volver a seleccionar la familia.
+- **Dos Modos de Aplicación:**
+  - **Individual (desde el modal de pago o botón familiar):** Exonera a una familia específica seleccionando la familia, semanas deseadas y motivo.
+  - **Grupal ("Toda la Ruta"):** Aplica la exoneración a todas las familias activas en un solo paso con confirmación de seguridad.
+- **Pastillas de Motivo Rápido:** Selección con un clic de *"🏖️ Vacaciones"*, *"🛑 Suspensión"*, *"📅 Feriado"* o *"🤝 Acuerdo"*, más campo libre para especificar motivos personalizados.
+- **Protección de Pagos Previos:** Opción configurable para conservar cuotas adelantadas que una familia ya haya pagado o sobreescribirlas si corresponde.
+- **Visualización en Cuotas y Listas:**
+  - Las semanas exoneradas se identifican con un botón/badge slate con icono de sombrilla (`beach_access`) en lugar de rojo (deuda) o verde (pago).
+  - El pie de tarjeta de la familia muestra el distintivo *"Al día ✨"* junto a una píldora con el conteo de semanas exoneradas (ej. `2 sem. exoneradas`).
+- **Comprobante Oficial de Exoneración (Canvas 2D PNG):**
+  - Genera una tarjeta de alta definición estilo bancario con cabecera en azul cielo/océano, título *"MiRuta • Comprobante de Exoneración"*, número `#EXO-XXXX`, sello oficial **🏖️ CUOTA EXONERADA ($0.00)**, motivo registrado y rango de fechas.
+  - Botones funcionales para compartir por WhatsApp mediante Web Share API y descargar en PNG.
+- **Cálculos Financieros Impecables:**
+  - Las cuotas exoneradas no suman al monto adeudado ni inflan el total recaudado en los resúmenes financieros de Inicio y Pagos.
+
+### 7. 📅 Control de Asistencia Diaria y Semanal con Estado "No asistió"
+- **Tres Estados Interactivos:** Soporta `En espera ⏳`, `Abordado ✅` y el nuevo estado `No asistió ❌` (con distintivo rojo suave e ícono `person_off`), permitiendo registrar ausencias tanto desde la tarjeta rápida de Inicio como en el historial semanal.
 - **Historial Completo por Fecha (`[childId+date]`):** La tabla `attendance` en Dexie.js indexa y filtra estrictamente por la fecha actual del sistema en formato `YYYY-MM-DD`.
 - **Reinicio Automático Cada Día:** Cada nuevo día de calendario todos los estudiantes inician automáticamente en `En espera ⏳`.
 - **Preservación de Historial:** Todos los registros de asistencia de días anteriores permanecen intactos en IndexedDB para auditoría y consulta.
 
-### 7. 📋 Portapapeles Robusto Universal (`copyToClipboard`)
+### 8. 🔍 Buscador Instantáneo en Inicio, Familias y Pagos
+- **Búsqueda en Tiempo Real sin Acentos:** En Inicio, Familias y Pagos, las barras de búsqueda filtran instantáneamente normalizando mayúsculas, minúsculas y tildes (`normalize('NFD')`), permitiendo encontrar de inmediato a cualquier estudiante o representante.
+- **Botón Rápido de Limpieza (✕):** Aparece automáticamente al escribir para vaciar el término de búsqueda con un solo toque y restaurar el listado completo.
+- **Operatividad en Resultados Filtrados:** Se puede marcar asistencia, abrir detalles o modificar el orden de ruta directamente sobre los resultados filtrados.
+
+### 9. 🔀 Orden Personalizado de Recogida y Entrega por Turno
+- **Campos `ordenManana` y `ordenTarde`:** Permite organizar la secuencia exacta en que se recoge o entrega a los estudiantes en cada turno.
+- **Modo "Ordenar ruta":** Botón en la cabecera de la lista de alumnos que activa botones táctiles grandes de Subir (▲) y Bajar (▼) en cada tarjeta, guardando el nuevo orden inmediatamente en IndexedDB.
+- **Badges Numéricos de Parada:** Cada alumno exhibe su número de orden (`#1`, `#2`, `#3`...) sobre su avatar para guiar visualmente la ruta.
+
+### 10. 📋 Portapapeles Robusto Universal (`copyToClipboard`)
 - Función auxiliar resiliente con fallback inteligente: intenta primero la moderna Clipboard API en contextos seguros y, en redes locales HTTP (por ejemplo al probar en el teléfono via `http://192.168.x.x:8080`) o navegadores móviles con restricciones de seguridad, activa el fallback con `<textarea>` invisible y `document.execCommand('copy')` con fuente de 16px para evitar auto-zoom en iOS Safari.
 - Muestra siempre una confirmación toast verde con icono de check: *"¡Copiado al portapapeles!"*.
 
-### 8. 🔔 Campanita de Alertas Activas y Botón Flotante (+)
+### 11. 🛡️ Protección de Interfaz (Anti-Bloqueo de Netlify)
+- Regla CSS dedicada que oculta badges o drawers flotantes inyectados por Netlify (`iframe[src*="netlify"]`, `[data-netlify-deploy-id]`, etc.) garantizando que nunca se obstaculicen los botones de navegación inferior ("Pagos" y "Ajustes").
+
+### 12. 🔔 Campanita de Alertas Activas y Botón Flotante (+)
 - **Campanita Superior:** Notifica en un modal deslizable tanto los cumpleaños próximos como las familias que tienen cuotas pendientes en la semana en curso.
 - **Botón Flotante (+):** Inteligente y contextual:
   - En **Inicio** y **Pagos**: Abre el modal *Registrar Pago*.
   - En **Familias**: Abre el modal *Nueva Familia y Niños*.
 
-### 9. ⚙️ Vista de Ajustes e Identidad Oficial
+### 13. ⚙️ Vista de Ajustes e Identidad Oficial
 - **Logo Oficial de MiRuta:** Integrado en la cabecera superior, pantalla de carga y en la sección de Ajustes con el isotipo centrado y libre de bordes residuales.
 - **Splash Screen (Pantalla de Carga):** Animación de apertura suave que exhibe el isotipo oficial, la tipografía de marca y el eslogan: *"Tu transporte escolar, organizado y al día"*.
 - **📖 Guía Rápida de Uso Integrada (Exportable a PDF):** Vista ilustrada con iconos que explica en 4 pasos esenciales cómo usar la app (Perfil/Pago Móvil, Familias y Hermanos con descuento, Pagos semanales y Recibos por WhatsApp, y Respaldo mensual en JSON), con botón directo para **Imprimir o Guardar como PDF**.

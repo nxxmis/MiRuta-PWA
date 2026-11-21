@@ -20,6 +20,16 @@ db.version(2).stores({
   attendance: 'id, childId, date, status, [childId+date]'
 });
 
+// Version 3: Soporte para pagos exonerados y estado
+db.version(3).stores({
+  payments: '++id, familyId, year, month, week, date, method, status, [year+month], [familyId+year+month]'
+});
+
+// Version 4: Soporte para orden personalizado de ruta (ordenManana, ordenTarde)
+db.version(4).stores({
+  children: '++id, familyId, firstName, lastName, birthDate, school, turn, modality, ordenManana, ordenTarde'
+});
+
 // Default Settings
 const DEFAULT_SETTINGS = {
   id: 'config',
@@ -98,7 +108,8 @@ async function seedSampleData(force = false) {
       birthDate: '2016-05-14',
       school: 'Colegio La Salle',
       turn: 'Mañana',
-      modality: 'Completo'
+      modality: 'Completo',
+      ordenManana: 1
     },
     {
       familyId: fam1Id,
@@ -107,7 +118,8 @@ async function seedSampleData(force = false) {
       birthDate: bdayIn3Days,
       school: 'Colegio La Salle',
       turn: 'Mañana',
-      modality: 'Completo'
+      modality: 'Completo',
+      ordenManana: 2
     }
   ]);
 
@@ -168,7 +180,8 @@ async function seedSampleData(force = false) {
     birthDate: '2017-08-10',
     school: 'Colegio Alemán',
     turn: 'Mañana',
-    modality: 'Completo'
+    modality: 'Completo',
+    ordenManana: 3
   });
 
   // Pagos Familia 2: Sem 1 a Sem 4 al día
@@ -196,7 +209,8 @@ async function seedSampleData(force = false) {
     birthDate: bdayTomorrow,
     school: 'Instituto Montessori',
     turn: 'Tarde',
-    modality: 'Solo ida'
+    modality: 'Solo ida',
+    ordenTarde: 1
   });
 
   await db.payments.bulkAdd([
@@ -222,7 +236,8 @@ async function seedSampleData(force = false) {
     birthDate: bdayToday,
     school: 'Colegio San José',
     turn: 'Mañana',
-    modality: 'Solo vuelta'
+    modality: 'Solo vuelta',
+    ordenManana: 4
   });
 
   await db.payments.bulkAdd([
@@ -247,7 +262,8 @@ async function seedSampleData(force = false) {
     birthDate: '2017-03-12',
     school: 'Colegio San José',
     turn: 'Tarde',
-    modality: 'Completo'
+    modality: 'Completo',
+    ordenTarde: 2
   });
 
   await db.payments.bulkAdd([
@@ -360,7 +376,9 @@ window.MiRutaDB = {
           birthDate: child.birthDate || '',
           school: child.school || '',
           turn: child.turn || 'Mañana',
-          modality: child.modality || 'Completo'
+          modality: child.modality || 'Completo',
+          ordenManana: child.ordenManana != null ? Number(child.ordenManana) : null,
+          ordenTarde: child.ordenTarde != null ? Number(child.ordenTarde) : null
         });
       }
 
@@ -464,8 +482,18 @@ window.MiRutaDB = {
       existing = await db.attendance.where('[childId+date]').equals([numChildId, todayStr]).first();
     }
 
-    // Default if nonexistent for today is 'espera' -> transitions to 'abordado'
-    const newStatus = (!existing || existing.status === 'espera') ? 'abordado' : 'espera';
+    // Cycle: 'espera' -> 'abordado' -> 'no_asistio' -> 'espera'
+    let newStatus = 'abordado';
+    if (existing) {
+      if (existing.status === 'espera') {
+        newStatus = 'abordado';
+      } else if (existing.status === 'abordado') {
+        newStatus = 'no_asistio';
+      } else if (existing.status === 'no_asistio') {
+        newStatus = 'espera';
+      }
+    }
+
     await db.attendance.put({
       id,
       childId: numChildId,
@@ -474,6 +502,30 @@ window.MiRutaDB = {
       timestamp: new Date().toISOString()
     });
     return newStatus;
+  },
+
+  async setChildAttendance(childId, dateStr, status) {
+    const numChildId = Number(childId);
+    const id = `${numChildId}_${dateStr}`;
+    await db.attendance.put({
+      id,
+      childId: numChildId,
+      date: dateStr,
+      status: status,
+      timestamp: new Date().toISOString()
+    });
+    return status;
+  },
+
+  async updateChildrenOrder(updates, turn) {
+    const field = turn === 'Mañana' ? 'ordenManana' : 'ordenTarde';
+    await db.transaction('rw', db.children, async () => {
+      for (const item of updates) {
+        await db.children.update(Number(item.id), {
+          [field]: Number(item.order)
+        });
+      }
+    });
   },
 
   async getAttendanceHistory(childId) {
@@ -490,16 +542,25 @@ window.MiRutaDB = {
   },
 
   async registerPayment(paymentData) {
+    const isExonerated = paymentData.status === 'exonerado' || paymentData.method === 'exonerado';
     const payload = {
-      familyId: Number(paymentData.familyId),
+      familyId: Number(paymentData.familyId || paymentData.familiaId),
       year: Number(paymentData.year),
       month: Number(paymentData.month),
       week: Number(paymentData.week),
-      amount: parseFloat(paymentData.amount) || 0,
-      method: paymentData.method || 'pago_movil',
-      reference: paymentData.reference ? paymentData.reference.trim() : '',
+      amount: isExonerated ? 0 : (parseFloat(paymentData.amount || paymentData.monto) || 0),
+      monto: isExonerated ? 0 : (parseFloat(paymentData.amount || paymentData.monto) || 0),
+      method: paymentData.method || (isExonerated ? 'exonerado' : 'pago_movil'),
+      status: isExonerated ? 'exonerado' : (paymentData.status || 'pagado'),
+      estado: isExonerated ? 'exonerado' : (paymentData.status || 'pagado'),
+      reason: paymentData.reason || paymentData.motivo || '',
+      motivo: paymentData.motivo || paymentData.reason || '',
+      reference: paymentData.reference ? paymentData.reference.trim() : (isExonerated ? 'EXONERADO' : ''),
       date: paymentData.date || getTodayDateStr(),
-      notes: paymentData.notes ? paymentData.notes.trim() : '',
+      notes: paymentData.notes ? paymentData.notes.trim() : (paymentData.motivo || ''),
+      fechaInicio: paymentData.fechaInicio || paymentData.startDate || '',
+      fechaFin: paymentData.fechaFin || paymentData.endDate || '',
+      semanas: paymentData.semanas || [Number(paymentData.week)],
       createdAt: new Date().toISOString()
     };
 
@@ -520,6 +581,67 @@ window.MiRutaDB = {
     } else {
       return await db.payments.add(payload);
     }
+  },
+
+  // Exonerar semanas para una o múltiples familias (Vacaciones, asuetos, etc.)
+  async exonerateWeeks({ familyIds, year, month, weeks, reason, startDate, endDate, overwritePaid = false }) {
+    const y = Number(year);
+    const m = Number(month);
+    const createdIds = [];
+
+    const famList = Array.isArray(familyIds) ? familyIds : [familyIds];
+    const weeksList = Array.isArray(weeks) ? weeks.map(Number) : [Number(weeks)];
+    const motivoText = reason ? reason.trim() : 'Vacaciones escolares';
+
+    for (const famId of famList) {
+      for (const w of weeksList) {
+        const existing = await db.payments
+          .where({
+            familyId: Number(famId),
+            year: y,
+            month: m,
+            week: Number(w)
+          })
+          .first();
+
+        // Si ya está pagado con monto > 0 y no se desea sobreescribir, respetamos el pago previo
+        if (existing && !overwritePaid && existing.status !== 'exonerado' && existing.method !== 'exonerado' && (existing.amount || 0) > 0) {
+          continue;
+        }
+
+        const record = {
+          familyId: Number(famId),
+          familiaId: Number(famId),
+          year: y,
+          month: m,
+          week: Number(w),
+          amount: 0,
+          monto: 0,
+          method: 'exonerado',
+          status: 'exonerado',
+          estado: 'exonerado',
+          reason: motivoText,
+          motivo: motivoText,
+          reference: 'EXONERADO',
+          notes: motivoText,
+          fechaInicio: startDate || '',
+          fechaFin: endDate || '',
+          semanas: weeksList,
+          date: getTodayDateStr(),
+          createdAt: new Date().toISOString()
+        };
+
+        if (existing) {
+          record.id = existing.id;
+          await db.payments.put(record);
+          createdIds.push(record.id);
+        } else {
+          const newId = await db.payments.add(record);
+          createdIds.push(newId);
+        }
+      }
+    }
+    return createdIds;
   },
 
   async deletePayment(id) {
