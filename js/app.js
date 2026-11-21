@@ -195,48 +195,18 @@ window.switchTab = async function(path) {
 };
 
 function setupSwipeNavigation() {
-  const main = document.querySelector('main');
-  if (!main) return;
-
   let touchStartX = 0;
   let touchStartY = 0;
-  let touchStartTime = 0;
   let isIgnored = false;
-
-  function isInteractiveElement(el) {
-    if (!el) return false;
-    return !!el.closest('input, textarea, select, [contenteditable="true"]');
-  }
-
-  function isInsideHorizontalScroll(el) {
-    let curr = el;
-    while (curr && curr !== main && curr !== document.body && curr !== document.documentElement) {
-      if (curr.scrollWidth > curr.clientWidth + 6) {
-        const overflowX = window.getComputedStyle(curr).overflowX;
-        if (overflowX === 'auto' || overflowX === 'scroll') return true;
-      }
-      if (curr.classList && curr.classList.contains('overflow-x-auto') && curr.scrollWidth > curr.clientWidth + 6) {
-        return true;
-      }
-      curr = curr.parentElement;
-    }
-    return false;
-  }
 
   function isModalOpen() {
     if (document.body.classList.contains('overflow-hidden')) return true;
     return !!document.querySelector('.fixed.z-50:not(.hidden)');
   }
 
-  main.addEventListener('touchstart', (e) => {
-    // Ignore multi-touch
-    if (e.touches.length !== 1) {
-      isIgnored = true;
-      return;
-    }
-
-    const target = e.target;
-    if (isModalOpen() || isInteractiveElement(target) || isInsideHorizontalScroll(target)) {
+  document.addEventListener('touchstart', (e) => {
+    // Si no es un solo dedo o hay modal abierto o es un campo de texto/formulario
+    if (e.touches.length !== 1 || isModalOpen() || (e.target && e.target.closest('input, textarea, select'))) {
       isIgnored = true;
       return;
     }
@@ -244,47 +214,49 @@ function setupSwipeNavigation() {
     isIgnored = false;
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
-    touchStartTime = Date.now();
   }, { passive: true });
 
-  main.addEventListener('touchend', (e) => {
+  document.addEventListener('touchend', (e) => {
     if (isIgnored || !e.changedTouches || e.changedTouches.length === 0) return;
-
-    const target = e.target;
-    if (isModalOpen() || isInteractiveElement(target) || isInsideHorizontalScroll(target)) return;
+    if (isModalOpen() || (e.target && e.target.closest('input, textarea, select'))) return;
 
     const touchEndX = e.changedTouches[0].clientX;
     const touchEndY = e.changedTouches[0].clientY;
     const deltaX = touchEndX - touchStartX;
     const deltaY = touchEndY - touchStartY;
-    const elapsedTime = Date.now() - touchStartTime;
-
-    // Discard slow gestures (> 800ms)
-    if (elapsedTime > 800) return;
 
     const absX = Math.abs(deltaX);
     const absY = Math.abs(deltaY);
 
-    // Rule: deltaX > 60px AND |deltaX| > |deltaY| * 1.5
-    if (absX > 60 && absX > absY * 1.5) {
-      const currentIdx = MAIN_TABS.indexOf(state.currentTab || 'inicio');
-      if (currentIdx === -1) return;
+    // Condición: desplazamiento horizontal > 50px y movimiento horizontal supera al vertical (* 1.3)
+    if (absX > 50 && absX > absY * 1.3) {
+      // Identificar los 4 botones reales de navegación en orden (Inicio, Familias, Pagos, Ajustes)
+      const navButtons = Array.from(document.querySelectorAll('nav [data-path]'));
+      if (navButtons.length === 0) return;
+
+      // Detectar cuál tiene la clase activa actualmente
+      let currentIdx = navButtons.findIndex(btn => 
+        btn.getAttribute('aria-current') === 'page' || 
+        btn.classList.contains('text-secondary') || 
+        btn.getAttribute('data-path') === state.currentTab
+      );
+      if (currentIdx === -1) currentIdx = 0;
 
       if (deltaX < 0) {
-        // Swipe Left -> Next tab
-        if (currentIdx < MAIN_TABS.length - 1) {
-          window.switchTab(MAIN_TABS[currentIdx + 1]);
+        // Deslizar hacia la izquierda -> avanzar al siguiente
+        if (currentIdx < navButtons.length - 1) {
+          navButtons[currentIdx + 1].click();
         }
       } else {
-        // Swipe Right -> Prev tab
+        // Deslizar hacia la derecha -> retroceder al anterior
         if (currentIdx > 0) {
-          window.switchTab(MAIN_TABS[currentIdx - 1]);
+          navButtons[currentIdx - 1].click();
         }
       }
     }
   }, { passive: true });
 
-  main.addEventListener('touchcancel', () => {
+  document.addEventListener('touchcancel', () => {
     isIgnored = true;
   }, { passive: true });
 }

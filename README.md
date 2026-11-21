@@ -123,9 +123,10 @@
 - **Respaldo y Restauración (.json):** Exporta toda la base de datos local a un archivo `.json` descargable y permite restaurar respaldos en cualquier momento.
 
 ### 14. 👆 Navegación Táctil por Deslizamiento Lateral (Swipe entre Pestañas)
-- **Gestos Táctiles Nativos:** Deslizar el dedo hacia la izquierda o derecha en el contenedor principal cambia fluidamente entre las 4 pestañas: `Inicio` $\leftrightarrow$ `Familias` $\leftrightarrow$ `Pagos` $\leftrightarrow$ `Ajustes`.
-- **Filtro Inteligente Anti Falsos Positivos:** Requiere `|deltaX| > 60px` y `|deltaX| > |deltaY| * 1.5` para garantizar que el scroll vertical diario no active cambios accidentales de pantalla.
-- **Detección Contextual Segura:** Cancela automáticamente el swipe cuando se interactúa en campos de texto (`input`, `textarea`, `select`), listas con scroll horizontal o cuando existe cualquier modal abierto.
+- **Gestos Táctiles Optimizados:** Deslizar el dedo horizontalmente en cualquier parte de la pantalla conmuta de forma natural entre las 4 pestañas principales: `Inicio` $\leftrightarrow$ `Familias` $\leftrightarrow$ `Pagos` $\leftrightarrow$ `Ajustes`.
+- **Compatibilidad Chrome en Android e iOS:** Reglas CSS nativas (`touch-action: pan-y; overscroll-behavior-x: none`) que impiden que el navegador interfiera o cancele el deslizamiento.
+- **Detección Directa y Confiable:** Detección en `document` que simula el clic directo sobre el botón correspondiente de la barra inferior con un umbral sensible de 50px (`Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3`).
+- **Seguridad y Anti Falsos Positivos:** Ignora el gesto si el usuario está escribiendo en campos de formulario (`input`, `textarea`, `select`) o si hay un modal abierto.
 - **Transición Visual Fluida:** Animación CSS con aceleración de hardware para un cambio de vista suave y moderno.
 
 ---
