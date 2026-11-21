@@ -138,20 +138,70 @@ function updateNotificationBadge() {
   }
 }
 
+// -------------------------------------------------------------
+// Speed Dial & FAB (Floating Action Button)
+// -------------------------------------------------------------
+
+let isSpeedDialOpen = false;
+
+window.toggleSpeedDial = function(force = null) {
+  const menu = document.getElementById('speedDialMenu');
+  const backdrop = document.getElementById('speedDialBackdrop');
+  const fabIcon = document.getElementById('fabIcon') || document.querySelector('#fabActionBtn .material-symbols-outlined');
+  if (!menu || !backdrop) return;
+
+  const shouldOpen = force !== null ? force : !isSpeedDialOpen;
+  isSpeedDialOpen = shouldOpen;
+
+  if (shouldOpen) {
+    backdrop.classList.remove('hidden');
+    menu.classList.remove('hidden');
+    menu.classList.add('flex', 'animate-in', 'slide-in-from-bottom-3', 'fade-in', 'duration-200');
+    if (fabIcon) fabIcon.classList.add('rotate-45');
+  } else {
+    backdrop.classList.add('hidden');
+    menu.classList.add('hidden');
+    menu.classList.remove('flex');
+    if (fabIcon) fabIcon.classList.remove('rotate-45');
+  }
+};
+
+window.handleSpeedDialAction = function(action) {
+  window.toggleSpeedDial(false);
+  if (action === 'payment') {
+    openPaymentModal();
+  } else if (action === 'familias') {
+    window.switchTab('familias');
+  } else if (action === 'pagos') {
+    window.switchTab('pagos');
+  } else if (action === 'ajustes') {
+    window.switchTab('ajustes');
+  }
+};
+
 function updateFab() {
   const fab = document.getElementById('fabActionBtn');
+  const fabIcon = document.getElementById('fabIcon') || fab?.querySelector('.material-symbols-outlined');
   if (!fab) return;
 
-  if (state.currentTab === 'inicio' || state.currentTab === 'pagos') {
+  // Cerrar Speed Dial al actualizar la barra
+  window.toggleSpeedDial(false);
+
+  if (state.currentTab === 'inicio') {
+    fab.classList.remove('hidden');
+    fab.setAttribute('aria-label', 'Menú Rápido');
+    fab.title = 'Menú Rápido';
+    if (fabIcon) fabIcon.textContent = 'add';
+  } else if (state.currentTab === 'pagos') {
     fab.classList.remove('hidden');
     fab.setAttribute('aria-label', 'Registrar Pago');
     fab.title = 'Registrar Pago';
-    fab.querySelector('.material-symbols-outlined').textContent = 'add_circle';
+    if (fabIcon) fabIcon.textContent = 'add_circle';
   } else if (state.currentTab === 'familias') {
     fab.classList.remove('hidden');
     fab.setAttribute('aria-label', 'Nueva Familia');
     fab.title = 'Nueva Familia';
-    fab.querySelector('.material-symbols-outlined').textContent = 'person_add';
+    if (fabIcon) fabIcon.textContent = 'person_add';
   } else {
     fab.classList.add('hidden');
   }
@@ -166,6 +216,9 @@ const MAIN_TABS = ['inicio', 'familias', 'pagos', 'ajustes'];
 window.switchTab = async function(path) {
   if (!MAIN_TABS.includes(path)) return;
   if (state.currentTab === path) return;
+
+  // Cerrar Speed Dial si estaba abierto
+  window.toggleSpeedDial(false);
 
   const navLinks = document.querySelectorAll('nav [data-path]');
   const targetLink = document.querySelector(`nav [data-path="${path}"]`);
@@ -205,8 +258,8 @@ function setupSwipeNavigation() {
   }
 
   document.addEventListener('touchstart', (e) => {
-    // Si no es un solo dedo o hay modal abierto o es un campo de texto/formulario
-    if (e.touches.length !== 1 || isModalOpen() || (e.target && e.target.closest('input, textarea, select'))) {
+    // Si no es un solo dedo o hay modal/speed dial abierto o es un campo de texto/formulario
+    if (e.touches.length !== 1 || isModalOpen() || isSpeedDialOpen || (e.target && e.target.closest('input, textarea, select'))) {
       isIgnored = true;
       return;
     }
@@ -218,7 +271,7 @@ function setupSwipeNavigation() {
 
   document.addEventListener('touchend', (e) => {
     if (isIgnored || !e.changedTouches || e.changedTouches.length === 0) return;
-    if (isModalOpen() || (e.target && e.target.closest('input, textarea, select'))) return;
+    if (isModalOpen() || isSpeedDialOpen || (e.target && e.target.closest('input, textarea, select'))) return;
 
     const touchEndX = e.changedTouches[0].clientX;
     const touchEndY = e.changedTouches[0].clientY;
@@ -290,8 +343,11 @@ function setupNavigation() {
   // Floating Action Button (+) click
   const fabBtn = document.getElementById('fabActionBtn');
   if (fabBtn) {
-    fabBtn.addEventListener('click', () => {
-      if (state.currentTab === 'familias') {
+    fabBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (state.currentTab === 'inicio') {
+        window.toggleSpeedDial();
+      } else if (state.currentTab === 'familias') {
         openFamilyModal();
       } else {
         openPaymentModal();

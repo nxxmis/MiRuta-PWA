@@ -101,11 +101,16 @@
 ### 11. 🛡️ Protección de Interfaz (Anti-Bloqueo de Netlify)
 - Regla CSS dedicada que oculta badges o drawers flotantes inyectados por Netlify (`iframe[src*="netlify"]`, `[data-netlify-deploy-id]`, etc.) garantizando que nunca se obstaculicen los botones de navegación inferior ("Pagos" y "Ajustes").
 
-### 12. 🔔 Campanita de Alertas Activas y Botón Flotante (+)
+### 12. 🔔 Campanita de Alertas Activas y Menú Flotante Speed Dial (+)
 - **Campanita Superior:** Notifica en un modal deslizable tanto los cumpleaños próximos como las familias que tienen cuotas pendientes en la semana en curso.
-- **Botón Flotante (+):** Inteligente y contextual:
-  - En **Inicio** y **Pagos**: Abre el modal *Registrar Pago*.
-  - En **Familias**: Abre el modal *Nueva Familia y Niños*.
+- **Botón Flotante (+) con Menú Speed Dial:**
+  - En **Inicio**: Despliega un menú flotante vertical hacia arriba con backdrop translúcido y rotación a "✕", ofreciendo accesos directos al alcance del pulgar:
+    - *Registrar Pago* (abre el modal de cobro/pago).
+    - *Ir a Familias* (navega al directorio).
+    - *Ir a Pagos* (navega al control semanal).
+    - *Ir a Ajustes* (navega a la configuración).
+  - En **Familias**: Abre directamente el modal *Nueva Familia y Niños*.
+  - En **Pagos**: Abre directamente el modal *Registrar Pago*.
 
 ### 13. ⚙️ Vista de Ajustes e Identidad Oficial
 - **Logo Oficial de MiRuta:** Integrado en la cabecera superior, pantalla de carga y en la sección de Ajustes con el isotipo centrado y libre de bordes residuales.

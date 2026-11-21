@@ -756,11 +756,62 @@
   </main>
 
   <!-- ============================================================== -->
-  <!-- BOTÓN FLOTANTE (+) ACCIÓN RÁPIDA CONTEXTUAL                     -->
+  <!-- SPEED DIAL / BOTÓN FLOTANTE (+) ACCIÓN RÁPIDA                   -->
   <!-- ============================================================== -->
-  <div class="fixed bottom-20 right-margin z-40 pb-safe pointer-events-none">
-    <button id="fabActionBtn" aria-label="Acción Rápida" class="pointer-events-auto w-14 h-14 rounded-full bg-secondary text-on-secondary shadow-[0_12px_28px_-4px_rgba(16,185,129,0.35),0_4px_12px_-2px_rgba(15,23,42,0.08)] flex items-center justify-center active:scale-95 transition-transform hover:opacity-95">
-      <span class="material-symbols-outlined text-[30px]">add</span>
+  <!-- Backdrop semi-transparente para cerrar Speed Dial al tocar fuera -->
+  <div id="speedDialBackdrop" onclick="toggleSpeedDial(false)" class="hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200"></div>
+
+  <!-- Contenedor del Speed Dial y Botón FAB -->
+  <div class="fixed bottom-20 right-margin z-40 pb-safe flex flex-col items-end gap-3 pointer-events-none">
+    
+    <!-- Menú Desplegable Speed Dial (hacia arriba) -->
+    <div id="speedDialMenu" class="hidden flex-col items-end gap-2.5 pointer-events-auto transition-all duration-200 origin-bottom-right">
+      
+      <!-- Opción 1: Registrar Pago (acción principal) -->
+      <button type="button" onclick="handleSpeedDialAction('payment')" class="group flex items-center gap-2.5 active:scale-95 transition-transform" title="Registrar Pago">
+        <span class="px-3 py-1.5 rounded-xl bg-surface-container-lowest text-on-surface font-label-md text-label-md font-bold shadow-md border border-surface-container/60 group-hover:bg-surface-container-low transition-colors select-none">
+          Registrar Pago
+        </span>
+        <div class="w-12 h-12 rounded-full bg-secondary text-on-secondary flex items-center justify-center shadow-lg group-hover:opacity-95 transition-opacity">
+          <span class="material-symbols-outlined text-[24px]">payments</span>
+        </div>
+      </button>
+
+      <!-- Opción 2: Ir a Familias -->
+      <button type="button" onclick="handleSpeedDialAction('familias')" class="group flex items-center gap-2.5 active:scale-95 transition-transform" title="Ir a Familias">
+        <span class="px-3 py-1.5 rounded-xl bg-surface-container-lowest text-on-surface font-label-md text-label-md font-bold shadow-md border border-surface-container/60 group-hover:bg-surface-container-low transition-colors select-none">
+          Ir a Familias
+        </span>
+        <div class="w-12 h-12 rounded-full bg-surface-container-lowest text-secondary border border-surface-container/80 flex items-center justify-center shadow-md group-hover:bg-surface-container-low transition-colors">
+          <span class="material-symbols-outlined text-[24px]">groups</span>
+        </div>
+      </button>
+
+      <!-- Opción 3: Ir a Pagos -->
+      <button type="button" onclick="handleSpeedDialAction('pagos')" class="group flex items-center gap-2.5 active:scale-95 transition-transform" title="Ir a Pagos">
+        <span class="px-3 py-1.5 rounded-xl bg-surface-container-lowest text-on-surface font-label-md text-label-md font-bold shadow-md border border-surface-container/60 group-hover:bg-surface-container-low transition-colors select-none">
+          Ir a Pagos
+        </span>
+        <div class="w-12 h-12 rounded-full bg-surface-container-lowest text-secondary border border-surface-container/80 flex items-center justify-center shadow-md group-hover:bg-surface-container-low transition-colors">
+          <span class="material-symbols-outlined text-[24px]">account_balance_wallet</span>
+        </div>
+      </button>
+
+      <!-- Opción 4: Ir a Ajustes -->
+      <button type="button" onclick="handleSpeedDialAction('ajustes')" class="group flex items-center gap-2.5 active:scale-95 transition-transform" title="Ir a Ajustes">
+        <span class="px-3 py-1.5 rounded-xl bg-surface-container-lowest text-on-surface font-label-md text-label-md font-bold shadow-md border border-surface-container/60 group-hover:bg-surface-container-low transition-colors select-none">
+          Ir a Ajustes
+        </span>
+        <div class="w-12 h-12 rounded-full bg-surface-container-lowest text-secondary border border-surface-container/80 flex items-center justify-center shadow-md group-hover:bg-surface-container-low transition-colors">
+          <span class="material-symbols-outlined text-[24px]">settings</span>
+        </div>
+      </button>
+
+    </div>
+
+    <!-- Botón Flotante Principal (+) -->
+    <button id="fabActionBtn" type="button" aria-label="Acción Rápida" class="pointer-events-auto w-14 h-14 rounded-full bg-secondary text-on-secondary shadow-[0_12px_28px_-4px_rgba(16,185,129,0.35),0_4px_12px_-2px_rgba(15,23,42,0.08)] flex items-center justify-center active:scale-95 transition-all duration-300 hover:opacity-95 select-none">
+      <span id="fabIcon" class="material-symbols-outlined text-[30px] transition-transform duration-300">add</span>
     </button>
   </div>
 
